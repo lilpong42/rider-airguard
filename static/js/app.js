@@ -1,60 +1,210 @@
-/* Rider-AirGuard Frontend Control & Simulator Logic */
+/* Rider-AirGuard Frontend Control & Spatial Driving Physics Simulator */
 (() => {
   "use strict";
 
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
   const state = {
     dashboard: null,
+    staticMode: false,
     activeRegionKey: "gangnam",
-    simStep: 0, // 0 -> 1(30점) -> 2(65점) -> 3(92점 임계치 돌파)
+    simHour: 18, // 18시 저녁 피크 기본
+    simSpeed: 1, // 1 | 3 | 5
+    simRunning: false,
+    simTimer: null,
+    mapClickMode: false,
+    customTarget: null, // [lat, lng]
+    manualPositionHold: false,
+    routePhase: "idle", // "idle" | "danger" | "escaping" | "recovered"
+    simMinutes: 0,
     simScore: 0,
+    peakScoreBeforeEscape: 0,
+    lastDeltaPerMin: 0,
+    currentSegmentLabel: "",
+    riderLatLng: null,
+    dangerCursor: { segIdx: 0, t: 0, dir: 1 },
+    escapePath: [],
+    escapeNames: [],
+    escapeSegIdx: 0,
+    escapeT: 0,
+    shelterVisited: false,
+    enteredPocketLogged: false,
+    esgPoints: 0,
+    escapeCount: 0,
+    simHistory: [], // [{ min, score, phase, event }]
+    lastHistoryMin: -1,
+    eventLog: [],
+    dangerTrailPoints: [],
+    escapeTrailPoints: [],
     audioEnabled: true,
     tileMode: "dark", // "dark" | "osm"
     showAllStations: false,
     map: null,
     tileLayer: null,
     regionLayer: null,
+    riderLayer: null,
+    pocketCircle: null,
     allStationsLayer: null,
     riderMarker: null,
-    riderAnimTimer: null,
+    dangerTrailPoly: null,
+    escapeTrailPoly: null,
+    targetMarker: null,
     rCodeCached: null,
   };
 
-  const SIM_STEPS = [
-    {
-      score: 0,
-      badge: "대기 (0분)",
-      cohb: "0.8 %",
-      alertText: "정상 (집중 양호)",
-      alertClass: "text-emerald",
-      no2Multiplier: 1.0,
-    },
-    {
-      score: 30,
-      badge: "누적 30분 운행",
-      cohb: "1.9 %",
-      alertText: "주의 (초기 기도 자극)",
-      alertClass: "text-sky",
-      no2Multiplier: 1.35,
-    },
-    {
-      score: 65,
-      badge: "누적 60분 운행",
-      cohb: "3.4 %",
-      alertText: "경고 (경미한 두통·피로)",
-      alertClass: "text-amber",
-      no2Multiplier: 1.85,
-    },
-    {
-      score: 92,
-      badge: "임계치 돌파 (90분)",
-      cohb: "5.2 %",
-      alertText: "🚨 위험 (졸음·추돌 고위험)",
-      alertClass: "text-rose",
-      no2Multiplier: 2.35,
-    },
-  ];
+  // --- 공간 거리 및 폴리라인 유틸리티 ---
+  function haversineMeters(a, b) {
+    const R = 6371000;
+    const rad = Math.PI / 180;
+    const p1 = a[0] * rad;
+    const p2 = b[0] * rad;
+    const dp = (b[0] - a[0]) * rad;
+    const dl = (b[1] - a[1]) * rad;
+    const x =
+      Math.sin(dp / 2) * Math.sin(dp / 2) +
+      Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    return 2 * R * Math.asin(Math.sqrt(clamp(x, 0, 1)));
+  }
 
-  // --- Web Audio API 경고음 합성 (외부 오디오 파일 없이 100% 브라우저 내장 Oscillator 사용) ---
+  function pointToSegmentMeters(p, a, b) {
+    const latScale = 111320;
+    const lngScale = 111320 * Math.cos(((a[0] + b[0]) * 0.5 * Math.PI) / 180);
+    const ax = a[1] * lngScale;
+    const ay = a[0] * latScale;
+    const bx = b[1] * lngScale;
+    const by = b[0] * latScale;
+    const px = p[1] * lngScale;
+    const py = p[0] * latScale;
+
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy;
+    if (len2 <= 1e-6) return Math.hypot(px - ax, py - ay);
+    const t = clamp(((px - ax) * dx + (py - ay) * dy) / len2, 0, 1);
+    return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+  }
+
+  function distanceToPolylineMeters(p, poly) {
+    if (!poly || poly.length === 0) return Infinity;
+    if (poly.length === 1) return haversineMeters(p, poly[0]);
+    let best = Infinity;
+    for (let i = 0; i < poly.length - 1; i++) {
+      const d = pointToSegmentMeters(p, poly[i], poly[i + 1]);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  function advanceDangerCursor(route, names, cursor, distMeters) {
+    let { segIdx, t, dir } = cursor;
+    let remaining = distMeters;
+    let safety = 0;
+
+    while (remaining > 0 && safety < 24) {
+      safety++;
+      const a = route[segIdx];
+      const b = route[segIdx + 1];
+      const segLen = Math.max(haversineMeters(a, b), 1);
+
+      if (dir > 0) {
+        const avail = (1 - t) * segLen;
+        if (remaining <= avail) {
+          t += remaining / segLen;
+          remaining = 0;
+        } else {
+          remaining -= avail;
+          if (segIdx < route.length - 2) {
+            segIdx += 1;
+            t = 0;
+          } else {
+            t = 1;
+            dir = -1;
+          }
+        }
+      } else {
+        const avail = t * segLen;
+        if (remaining <= avail) {
+          t -= remaining / segLen;
+          remaining = 0;
+        } else {
+          remaining -= avail;
+          if (segIdx > 0) {
+            segIdx -= 1;
+            t = 1;
+          } else {
+            t = 0;
+            dir = 1;
+          }
+        }
+      }
+    }
+
+    const p1 = route[segIdx];
+    const p2 = route[segIdx + 1];
+    const pos = [p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t];
+    const n1 = (names && names[segIdx]) || `구간 ${segIdx + 1}`;
+    const n2 = (names && names[segIdx + 1]) || `구간 ${segIdx + 2}`;
+    const segLabel = dir > 0 ? `${n1} → ${n2}` : `${n2} → ${n1}`;
+
+    return { pos, cursor: { segIdx, t, dir }, segLabel };
+  }
+
+  function advanceEscapePath(path, names, segIdx, t, distMeters) {
+    if (!path || path.length < 2) {
+      return { pos: state.riderLatLng, segIdx: 0, t: 1, finished: true, segLabel: "청정 권역 도착" };
+    }
+    let idx = segIdx;
+    let curT = t;
+    let remaining = distMeters;
+    let finished = false;
+    let safety = 0;
+
+    while (remaining > 0 && safety < 24) {
+      safety++;
+      const a = path[idx];
+      const b = path[idx + 1];
+      const segLen = Math.max(haversineMeters(a, b), 1);
+      const avail = (1 - curT) * segLen;
+
+      if (remaining <= avail) {
+        curT += remaining / segLen;
+        remaining = 0;
+      } else {
+        remaining -= avail;
+        if (idx < path.length - 2) {
+          idx += 1;
+          curT = 0;
+        } else {
+          curT = 1;
+          remaining = 0;
+          finished = true;
+        }
+      }
+    }
+
+    const p1 = path[idx];
+    const p2 = path[idx + 1];
+    const pos = [p1[0] + (p2[0] - p1[0]) * curT, p1[1] + (p2[1] - p1[1]) * curT];
+    const n1 = (names && names[idx]) || "청정 순환로";
+    const n2 = (names && names[idx + 1]) || "외곽 주거권역";
+    const segLabel = finished ? `${n2} 도착` : `${n1} → ${n2}`;
+
+    return { pos, segIdx: idx, t: curT, finished, segLabel };
+  }
+
+  function moveTowardTarget(cur, target, distMeters) {
+    const totalDist = haversineMeters(cur, target);
+    if (totalDist <= distMeters || totalDist < 5) {
+      return { pos: [target[0], target[1]], arrived: true };
+    }
+    const frac = distMeters / totalDist;
+    return {
+      pos: [cur[0] + (target[0] - cur[0]) * frac, cur[1] + (target[1] - cur[1]) * frac],
+      arrived: false,
+    };
+  }
+
+  // --- Web Audio API 경고음 및 회복음 합성 ---
   function playEmergencyChime() {
     if (!state.audioEnabled) return;
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -67,48 +217,538 @@
         { freq: 880, start: 0.0, dur: 0.14 },
         { freq: 1174.66, start: 0.16, dur: 0.14 },
         { freq: 880, start: 0.34, dur: 0.14 },
-        { freq: 1318.51, start: 0.50, dur: 0.28 },
+        { freq: 1318.51, start: 0.5, dur: 0.28 },
       ];
       pattern.forEach((tone) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.type = "triangle";
         osc.frequency.setValueAtTime(tone.freq, now + tone.start);
-
         gain.gain.setValueAtTime(0.001, now + tone.start);
         gain.gain.exponentialRampToValueAtTime(0.22, now + tone.start + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, now + tone.start + tone.dur);
-
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.start(now + tone.start);
         osc.stop(now + tone.start + tone.dur + 0.02);
       });
-    } catch (err) {
-      console.warn("Web Audio alert suppressed:", err);
-    }
-  }
-
-  function playStepTick(step) {
-    if (!state.audioEnabled) return;
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    try {
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(step === 1 ? 520 : 660, ctx.currentTime);
-      gain.gain.setValueAtTime(0.08, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.13);
     } catch (_) {}
   }
 
-  // --- Leaflet 지도 초기화 ---
+  function playRecoveryChime() {
+    if (!state.audioEnabled) return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+
+    try {
+      const ctx = new AudioCtx();
+      const now = ctx.currentTime;
+      const notes = [
+        { freq: 523.25, start: 0.0, dur: 0.14 },
+        { freq: 659.25, start: 0.12, dur: 0.14 },
+        { freq: 783.99, start: 0.24, dur: 0.24 },
+      ];
+      notes.forEach((n) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(n.freq, now + n.start);
+        gain.gain.setValueAtTime(0.001, now + n.start);
+        gain.gain.exponentialRampToValueAtTime(0.14, now + n.start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + n.start + n.dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + n.start);
+        osc.stop(now + n.start + n.dur + 0.02);
+      });
+    } catch (_) {}
+  }
+
+  // --- 시간대별 실측 데이터 조회 ---
+  function getHourData(region, hour) {
+    const list = region.hourly_readings || [];
+    const found = list.find((h) => h.hour === hour);
+    if (found) return found;
+    return {
+      hour,
+      label: `${String(hour).padStart(2, "0")}시`,
+      urban_no2: region.urban.no2_mean,
+      urban_co: region.urban.co_mean,
+      urban_o3: region.urban.o3_mean,
+      urban_risk: region.urban.risk_mean,
+      road_no2: region.road.no2_mean,
+      road_co: region.road.co_mean,
+      road_o3: region.road.o3_mean,
+      road_risk: region.road.risk_mean,
+    };
+  }
+
+  function populateHourSelect(region) {
+    const select = document.getElementById("simHourSelect");
+    if (!select || !region) return;
+    const prevVal = state.simHour;
+    select.innerHTML = "";
+    for (let h = 0; h < 24; h++) {
+      const opt = document.createElement("option");
+      opt.value = String(h);
+      let tag = "";
+      if (h >= 11 && h <= 14) tag = " · 점심 피크";
+      else if (h >= 17 && h <= 20) tag = " · 저녁 피크";
+      else if (h >= 1 && h <= 5) tag = " · 심야 저위험";
+      else if (h >= 8 && h <= 9) tag = " · 출근 피크";
+      opt.textContent = `${String(h).padStart(2, "0")}시${tag}`;
+      select.appendChild(opt);
+    }
+    select.value = String(prevVal);
+    updateHourContextPill(region);
+  }
+
+  function updateHourContextPill(region) {
+    const pill = document.getElementById("simHourContext");
+    if (!pill || !region) return;
+    const hd = getHourData(region, state.simHour);
+    pill.textContent = `도로변 ${hd.road_risk}점 vs 도시 ${hd.urban_risk}점`;
+    pill.classList.toggle("pill-cool", hd.road_risk < 75);
+  }
+
+  // --- 공간 좌표 기반 피폭 / 환기 변화율 계산 ---
+  function evaluateSpatialExposure(region, pos, phase) {
+    const hd = getHourData(region, state.simHour);
+    const pocketR = region.pocket_radius_m || 600;
+    const distPocket = haversineMeters(pos, region.road.coords);
+    const distRoad = distanceToPolylineMeters(pos, region.danger_route);
+    const trafficFactor = clamp(hd.road_risk / 68, 0.55, 1.5);
+    const cleanFactor = clamp(65 / Math.max(hd.urban_risk, 35), 0.75, 1.35);
+
+    // 1. 국소 실시간 흡입 NO2 (포켓 거리 기반 연속 보간)
+    const pocketRatio = clamp(1 - distPocket / (pocketR * 1.4), 0, 1);
+    const localNo2 = hd.urban_no2 + (hd.road_no2 * 1.12 - hd.urban_no2) * pocketRatio;
+
+    if (phase === "recovered") {
+      return {
+        distPocket,
+        rate: 0,
+        localNo2: hd.urban_no2 * 0.92,
+        zoneText: "청정 권역 안착 완료",
+        zoneClass: "text-emerald",
+        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 청정 외곽`,
+      };
+    }
+
+    if (phase === "escaping") {
+      if (distPocket <= pocketR * 0.65) {
+        return {
+          distPocket,
+          rate: -0.75,
+          localNo2,
+          zoneText: "포켓 중심 이탈 중 (감소 전환)",
+          zoneClass: "text-sky",
+          pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 탈출 시작`,
+        };
+      }
+      if (distPocket <= pocketR) {
+        return {
+          distPocket,
+          rate: -1.85,
+          localNo2,
+          zoneText: "포켓 경계 탈출 · 환기 개시",
+          zoneClass: "text-emerald",
+          pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 경계 이탈`,
+        };
+      }
+      return {
+        distPocket,
+        rate: -2.85 * cleanFactor,
+        localNo2: hd.urban_no2 * 0.94,
+        zoneText: "청정 외곽 순환 · 호흡기 환기",
+        zoneClass: "text-emerald",
+        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 청정 외곽`,
+      };
+    }
+
+    // "idle" 또는 "danger" (혹은 지도 드래그 테스트)
+    if (distPocket <= pocketR * 0.55) {
+      return {
+        distPocket,
+        rate: 3.35 * trafficFactor,
+        localNo2: hd.road_no2 * 1.15,
+        zoneText: "🔴 가스 포켓 중심 관통 (피폭 급증)",
+        zoneClass: "text-rose",
+        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 코어`,
+      };
+    }
+    if (distPocket <= pocketR) {
+      return {
+        distPocket,
+        rate: 2.05 * trafficFactor,
+        localNo2,
+        zoneText: "🟠 히든 가스 포켓 진입 (피폭 상승)",
+        zoneClass: "text-amber",
+        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 내부`,
+      };
+    }
+    if (distRoad <= 380) {
+      return {
+        distPocket,
+        rate: 0.55 * trafficFactor,
+        localNo2: hd.urban_no2 + (hd.road_no2 - hd.urban_no2) * 0.35,
+        zoneText: "🟡 대로변 외곽 진입 (완만 누적)",
+        zoneClass: "text-sky",
+        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 외곽`,
+      };
+    }
+
+    return {
+      distPocket,
+      rate: -1.75 * cleanFactor,
+      localNo2: hd.urban_no2 * 0.92,
+      zoneText: "🟢 청정 주거권역 (자연 환기)",
+      zoneClass: "text-emerald",
+      pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 청정 외곽`,
+    };
+  }
+
+  // --- 이벤트 로그 & 이력 관리 ---
+  function addEventLog(minVal, text, cls = "") {
+    const timeStr = `${Math.round(minVal)}분`;
+    state.eventLog.unshift({ time: timeStr, text, cls });
+    if (state.eventLog.length > 20) state.eventLog.pop();
+    renderEventLog();
+  }
+
+  function renderEventLog() {
+    const ul = document.getElementById("simEventLog");
+    if (!ul) return;
+    ul.innerHTML = "";
+    state.eventLog.forEach((ev) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<span class="ev-time">[${ev.time}]</span> <span class="${ev.cls}">${ev.text}</span>`;
+      ul.appendChild(li);
+    });
+  }
+
+  function pushHistorySample(min, score, phase, event = null) {
+    state.simHistory.push({ min, score, phase, event });
+    if (state.simHistory.length > 180) {
+      state.simHistory.shift();
+    }
+    state.lastHistoryMin = min;
+  }
+
+  // --- 순환 배차 발동 (자동 80점 돌파 또는 수동 전환) ---
+  function activateCircularEscape(region, isManual) {
+    if (state.routePhase === "escaping" || state.routePhase === "recovered") return;
+
+    state.routePhase = "escaping";
+    state.manualPositionHold = false;
+    state.customTarget = null;
+    if (state.targetMarker && state.riderLayer) {
+      state.riderLayer.removeLayer(state.targetMarker);
+      state.targetMarker = null;
+    }
+
+    state.peakScoreBeforeEscape = Math.max(Math.round(state.simScore), isManual ? Math.round(state.simScore) : 80);
+    state.shelterVisited = false;
+
+    // 쉼터 인덱스 찾기 (쉼터 이전 최적 합류 지점을 선택해 텔레포트 없이 연결)
+    const escapeRoute = region.escape_route || [];
+    const escapeNames = region.escape_waypoints || [];
+    let shelterIdx = escapeNames.findIndex((n) => n.includes("쉼터"));
+    if (shelterIdx < 0) shelterIdx = Math.min(2, escapeRoute.length - 1);
+
+    let bestIdx = 0;
+    let bestDist = Infinity;
+    for (let i = 0; i <= Math.min(shelterIdx, escapeRoute.length - 1); i++) {
+      const d = haversineMeters(state.riderLatLng, escapeRoute[i]);
+      if (d < bestDist) {
+        bestDist = d;
+        bestIdx = i;
+      }
+    }
+
+    const startPt = [state.riderLatLng[0], state.riderLatLng[1]];
+    if (bestDist > 80) {
+      state.escapePath = [startPt, ...escapeRoute.slice(bestIdx)];
+      state.escapeNames = ["현재 주행 위치", ...escapeNames.slice(bestIdx)];
+    } else {
+      state.escapePath = escapeRoute.slice(bestIdx);
+      state.escapeNames = escapeNames.slice(bestIdx);
+    }
+    state.escapeSegIdx = 0;
+    state.escapeT = 0;
+
+    if (!isManual) {
+      playEmergencyChime();
+      addEventLog(
+        state.simMinutes,
+        `🚨 임계치 80점 돌파 (${Math.round(state.simScore)}점)! 지연 0분 외곽 순환 배차 자동 발동`,
+        "ev-danger"
+      );
+    } else {
+      playRecoveryChime();
+      addEventLog(
+        state.simMinutes,
+        `🌿 수동 순환 배차 전환 (${Math.round(state.simScore)}점) — ${region.escape_call.shelter_name} 경유 시작`,
+        "ev-escape"
+      );
+    }
+
+    pushHistorySample(state.simMinutes, state.simScore, "escaping", "dispatch");
+    renderRegionBaseLayers(region);
+  }
+
+  // --- 물리 시뮬레이션 스텝 통합 (dtMin 단위 정밀 적분) ---
+  function stepSimulation(totalDtMin, options = {}) {
+    if (!state.dashboard) return;
+    const region = state.dashboard.regions[state.activeRegionKey];
+    if (!region) return;
+
+    const { stopOnEscapeTrigger = false } = options;
+    const sliceSize = 0.4; // 0.4분 단위로 구간·포켓·쉼터 정밀 적분
+    let rem = totalDtMin;
+
+    if (state.routePhase === "idle") {
+      state.routePhase = "danger";
+      state.simHistory = [{ min: state.simMinutes, score: state.simScore, phase: "danger", event: null }];
+      state.lastHistoryMin = state.simMinutes;
+      addEventLog(state.simMinutes, `🛵 ${region.danger_waypoints[0]} 출발 — 대로변 배달 콜 주행 시작`, "");
+    } else if (state.routePhase === "recovered") {
+      // 다음 상권 콜 이어서 주행 시작
+      resetRouteForNextRound(region, false);
+      state.routePhase = "danger";
+      addEventLog(state.simMinutes, `🛵 다음 상권 배달 콜 주행 개시 (${region.danger_waypoints[0]})`, "");
+    }
+
+    while (rem > 1e-4) {
+      const dt = Math.min(sliceSize, rem);
+      rem -= dt;
+
+      // 1. 이동 처리
+      if (state.customTarget) {
+        const res = moveTowardTarget(state.riderLatLng, state.customTarget, 230 * dt);
+        state.riderLatLng = res.pos;
+        state.currentSegmentLabel = "사용자 지정 지점 주행 중";
+        if (res.arrived) {
+          state.customTarget = null;
+          state.manualPositionHold = true;
+          if (state.targetMarker && state.riderLayer) {
+            state.riderLayer.removeLayer(state.targetMarker);
+            state.targetMarker = null;
+          }
+          addEventLog(state.simMinutes, "📍 지정 목적지 도착 — 현재 구역 공기 노출/환기 측정 중", "ev-shelter");
+        }
+      } else if (state.routePhase === "danger") {
+        if (!state.manualPositionHold) {
+          const res = advanceDangerCursor(
+            region.danger_route,
+            region.danger_waypoints,
+            state.dangerCursor,
+            210 * dt
+          );
+          state.riderLatLng = res.pos;
+          state.dangerCursor = res.cursor;
+          state.currentSegmentLabel = res.segLabel;
+        } else {
+          state.currentSegmentLabel = "수동 배치 지점 정밀 관측 중";
+        }
+      } else if (state.routePhase === "escaping") {
+        const res = advanceEscapePath(
+          state.escapePath,
+          state.escapeNames,
+          state.escapeSegIdx,
+          state.escapeT,
+          265 * dt
+        );
+        state.riderLatLng = res.pos;
+        state.escapeSegIdx = res.segIdx;
+        state.escapeT = res.t;
+        state.currentSegmentLabel = res.segLabel;
+
+        // 쉼터 경유 체크 (230m 이내)
+        if (!state.shelterVisited && region.shelters && region.shelters[0]) {
+          const dShelter = haversineMeters(state.riderLatLng, region.shelters[0].coords);
+          if (dShelter <= 230) {
+            state.shelterVisited = true;
+            state.simScore = Math.max(12, state.simScore - 18);
+            playRecoveryChime();
+            addEventLog(
+              state.simMinutes + dt,
+              `🛡️ ${region.shelters[0].name} 환기·산소 휴식 (-18점 즉시 회복!)`,
+              "ev-shelter"
+            );
+            pushHistorySample(state.simMinutes + dt, state.simScore, "escaping", "shelter");
+          }
+        }
+
+        if (res.finished) {
+          // 외곽 청정단지 도착 후 20점 이하까지 자연 환기 마감
+          if (state.simScore > 20) {
+            state.currentSegmentLabel = `${region.escape_waypoints[region.escape_waypoints.length - 1]} (청정 환기 마감)`;
+            state.simScore = Math.max(16, state.simScore - 3.8 * dt);
+            state.lastDeltaPerMin = -3.8;
+            state.simMinutes += dt;
+            if (state.simMinutes - state.lastHistoryMin >= 1.0) {
+              pushHistorySample(state.simMinutes, state.simScore, state.routePhase, null);
+            }
+            continue;
+          }
+
+          state.routePhase = "recovered";
+          state.esgPoints += 500;
+          state.escapeCount += 1;
+          state.lastDeltaPerMin = 0;
+          state.simMinutes += dt;
+          pushHistorySample(state.simMinutes, state.simScore, "recovered", "complete");
+          addEventLog(
+            state.simMinutes,
+            `✅ ${region.escape_waypoints[region.escape_waypoints.length - 1]} 안착! 최종 ${Math.round(state.simScore)}점 회복 (+500P 지급)`,
+            "ev-escape"
+          );
+          playRecoveryChime();
+          stopContinuousLoop();
+          break;
+        }
+      }
+
+      // 이동 궤적 기록
+      const lastTr = state.traveledPoints[state.traveledPoints.length - 1];
+      if (!lastTr || haversineMeters(lastTr, state.riderLatLng) > 35) {
+        state.traveledPoints.push([state.riderLatLng[0], state.riderLatLng[1]]);
+        if (state.traveledPoints.length > 220) state.traveledPoints.shift();
+      }
+
+      // 2. 공간 가스 노출 / 환기 계산
+      const evalRes = evaluateSpatialExposure(region, state.riderLatLng, state.routePhase);
+      state.lastDeltaPerMin = evalRes.rate;
+      const floorScore = state.peakScoreBeforeEscape > 0 ? 12 : 0;
+      state.simScore = clamp(state.simScore + evalRes.rate * dt, floorScore, 100);
+      state.simMinutes += dt;
+
+      // 가스 포켓 첫 진입 로그
+      const pocketR = region.pocket_radius_m || 600;
+      if (state.routePhase === "danger" && !state.enteredPocketLogged && evalRes.distPocket <= pocketR) {
+        state.enteredPocketLogged = true;
+        addEventLog(
+          state.simMinutes,
+          `🔴 ${region.road.displayName} 가스 포켓(${pocketR}m) 진입 — 마스크 투과 피폭 가속`,
+          "ev-danger"
+        );
+      }
+
+      // 히스토리 샘플 기록 (1분 간격)
+      if (state.simMinutes - state.lastHistoryMin >= 1.0) {
+        pushHistorySample(state.simMinutes, state.simScore, state.routePhase, null);
+      }
+
+      // 3. 임계치 80점 돌파 -> 자동 순환 배차 발동!
+      if (state.routePhase === "danger" && state.simScore >= 80) {
+        activateCircularEscape(region, false);
+        if (stopOnEscapeTrigger) {
+          break;
+        }
+      }
+    }
+
+    updateAllSimulatorVisuals();
+  }
+
+  function startContinuousLoop() {
+    if (state.simRunning) return;
+    if (state.routePhase === "recovered" && state.dashboard) {
+      resetRouteForNextRound(state.dashboard.regions[state.activeRegionKey], false);
+    }
+    state.simRunning = true;
+    if (state.simTimer) clearInterval(state.simTimer);
+
+    const tickMs = 150;
+    state.simTimer = setInterval(() => {
+      if (!state.simRunning) return;
+      // 1× = 2.0 sim-min/sec (0.3 min per 150ms), 3× = 6.0 min/sec, 5× = 10.0 min/sec
+      const dtMin = (2.0 * state.simSpeed * tickMs) / 1000;
+      stepSimulation(dtMin, { stopOnEscapeTrigger: false });
+    }, tickMs);
+
+    updatePlayButtonUI();
+  }
+
+  function stopContinuousLoop() {
+    state.simRunning = false;
+    if (state.simTimer) {
+      clearInterval(state.simTimer);
+      state.simTimer = null;
+    }
+    updatePlayButtonUI();
+  }
+
+  function updatePlayButtonUI() {
+    const btn = document.getElementById("btnSimPlayPause");
+    if (!btn) return;
+    btn.classList.toggle("is-running", state.simRunning);
+    if (state.simRunning) {
+      btn.textContent = "⏸ 주행 일시정지";
+    } else if (state.routePhase === "recovered") {
+      btn.textContent = "🛵 다음 상권 콜 주행";
+    } else if (state.routePhase === "idle") {
+      btn.textContent = "▶ 실시간 구간 주행 시작";
+    } else {
+      btn.textContent = "▶ 실시간 주행 재개";
+    }
+  }
+
+  function resetRouteForNextRound(region, fullReset = true) {
+    stopContinuousLoop();
+    state.routePhase = "idle";
+    state.manualPositionHold = false;
+    state.customTarget = null;
+    if (state.targetMarker && state.riderLayer) {
+      state.riderLayer.removeLayer(state.targetMarker);
+      state.targetMarker = null;
+    }
+    state.dangerCursor = { segIdx: 0, t: 0, dir: 1 };
+    state.escapePath = [];
+    state.escapeNames = [];
+    state.escapeSegIdx = 0;
+    state.escapeT = 0;
+    state.shelterVisited = false;
+    state.enteredPocketLogged = false;
+    state.peakScoreBeforeEscape = 0;
+    state.lastDeltaPerMin = 0;
+
+    if (region) {
+      const startPt = region.danger_route[0];
+      state.riderLatLng = [startPt[0], startPt[1]];
+      state.currentSegmentLabel = `${region.danger_waypoints[0]} (출발 대기)`;
+      state.traveledPoints = [[startPt[0], startPt[1]]];
+    }
+
+    if (fullReset) {
+      state.simMinutes = 0;
+      state.simScore = 0;
+      state.esgPoints = 0;
+      state.escapeCount = 0;
+      state.simHistory = [{ min: 0, score: 0, phase: "idle", event: null }];
+      state.lastHistoryMin = 0;
+      state.eventLog = [
+        {
+          time: "대기",
+          text: `${region ? region.danger_waypoints[0] : "출발지"} 대기 중 — 주행 시작 시 가스 포켓 통과에 따라 게이지가 실시간 반응합니다.`,
+          cls: "",
+        },
+      ];
+      renderEventLog();
+    } else {
+      // 다음 라운드는 방금 회복된 낮은 수치에서 자연 이어가기
+      state.simScore = Math.min(state.simScore, 15);
+      pushHistorySample(state.simMinutes, state.simScore, "idle", null);
+    }
+
+    if (region) {
+      renderRegionBaseLayers(region);
+    }
+    updateAllSimulatorVisuals();
+  }
+
+  // --- Leaflet 지도 초기화 및 분리된 레이어 렌더링 ---
   function initMap() {
     state.map = L.map("dispatchMap", {
       center: [37.5015, 127.0335],
@@ -116,7 +756,7 @@
       zoomSnap: 0.5,
       zoomControl: true,
     });
-    // 타일 로딩 전/오프라인 대비 한강 및 주요 간선도로 초경량 벡터 배경 레이어
+
     const hanRiver = [
       [37.575, 126.805],
       [37.554, 126.865],
@@ -136,7 +776,38 @@
 
     setTileLayer("dark");
     state.regionLayer = L.layerGroup().addTo(state.map);
+    state.riderLayer = L.layerGroup().addTo(state.map);
     state.allStationsLayer = L.layerGroup();
+
+    // 지도 클릭 주행 지원
+    state.map.on("click", (e) => {
+      if (!state.mapClickMode || !state.dashboard) return;
+      const region = state.dashboard.regions[state.activeRegionKey];
+      state.customTarget = [e.latlng.lat, e.latlng.lng];
+      state.manualPositionHold = false;
+      if (state.routePhase === "idle" || state.routePhase === "recovered") {
+        state.routePhase = "danger";
+      }
+      if (state.targetMarker) {
+        state.riderLayer.removeLayer(state.targetMarker);
+      }
+      state.targetMarker = L.circleMarker(state.customTarget, {
+        radius: 7,
+        color: "#38bdf8",
+        fillColor: "#0ea5e9",
+        fillOpacity: 0.5,
+        weight: 2,
+      })
+        .bindTooltip("지정 목적지")
+        .addTo(state.riderLayer);
+
+      addEventLog(state.simMinutes, "📍 지도 클릭 목적지 설정 — 실시간 이동 중", "ev-shelter");
+      if (!state.simRunning) {
+        startContinuousLoop();
+      }
+      updateAllSimulatorVisuals();
+      if (region) updateRiderMapVisuals(region);
+    });
   }
 
   function setTileLayer(mode) {
@@ -144,11 +815,8 @@
     if (state.tileLayer) {
       state.map.removeLayer(state.tileLayer);
     }
-    const url = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-    const attribution = "&copy; OpenStreetMap contributors (100% Free Open-Source)";
-
-    state.tileLayer = L.tileLayer(url, {
-      attribution,
+    state.tileLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors (100% Free Open-Source)",
       maxZoom: 19,
     }).addTo(state.map);
 
@@ -156,7 +824,6 @@
     if (mapEl) {
       mapEl.classList.toggle("map-dark-tiles", mode === "dark");
     }
-
     const btn = document.getElementById("btnTileToggle");
     if (btn) {
       btn.textContent = mode === "dark" ? "지도 테마: 다크" : "지도 테마: OSM 기본";
@@ -189,55 +856,34 @@
     state.allStationsLayer.addTo(state.map);
   }
 
-  function animateRiderAlongRoute(coords) {
-    if (state.riderAnimTimer) {
-      clearInterval(state.riderAnimTimer);
-      state.riderAnimTimer = null;
-    }
-    if (!coords || coords.length < 2) return;
-
-    const riderIcon = L.divIcon({
-      className: "",
-      html: `<div class="rider-pin" title="라이더 김성원 실시간 위치">🛵</div>`,
-      iconSize: [34, 34],
-      iconAnchor: [17, 17],
-    });
-
-    let segIdx = 0;
-    let t = 0;
-    state.riderMarker = L.marker(coords[0], { icon: riderIcon, zIndexOffset: 900 }).addTo(state.regionLayer);
-    state.riderMarker.bindPopup("<strong>라이더 김성원</strong><br/>실시간 호흡기 가스 노출 관제 중");
-
-    state.riderAnimTimer = setInterval(() => {
-      if (!state.riderMarker) return;
-      t += 0.05;
-      if (t >= 1) {
-        t = 0;
-        segIdx = (segIdx + 1) % (coords.length - 1);
-      }
-      const p1 = coords[segIdx];
-      const p2 = coords[segIdx + 1];
-      const lat = p1[0] + (p2[0] - p1[0]) * t;
-      const lng = p1[1] + (p2[1] - p1[1]) * t;
-      state.riderMarker.setLatLng([lat, lng]);
-    }, 120);
-  }
-
-  function renderRegionMap(region) {
+  // 정적 권역 레이어 렌더링 (측정소, 가스 포켓, 쉼터, 경로선, 구간 웨이포인트)
+  function renderRegionBaseLayers(region) {
+    if (!state.regionLayer || !region) return;
     state.regionLayer.clearLayers();
-    const isEscaped = state.simScore >= 80;
+    const isEscaping = state.routePhase === "escaping" || state.routePhase === "recovered";
+    const pocketR = region.pocket_radius_m || 600;
 
-    // 1. 도로변 히든 가스 포켓 반투명 경고 원
-    L.circle(region.road.coords, {
-      radius: 520,
+    // 1. 도로변 히든 가스 포켓 원 (핵심 + 외곽 2단 시각화)
+    state.pocketCircle = L.circle(region.road.coords, {
+      radius: pocketR,
       color: "#ef4444",
-      weight: 1.5,
+      weight: 1.6,
       dashArray: "6 6",
       fillColor: "#ef4444",
-      fillOpacity: isEscaped ? 0.12 : 0.24,
+      fillOpacity: isEscaping ? 0.12 : 0.22,
     }).addTo(state.regionLayer);
 
-    // 2. 도시대기 측정소 (초록색 안전 마커)
+    L.circle(region.road.coords, {
+      radius: Math.round(pocketR * 0.55),
+      color: "#f87171",
+      weight: 1,
+      dashArray: "3 4",
+      fillColor: "#dc2626",
+      fillOpacity: isEscaping ? 0.08 : 0.18,
+      interactive: false,
+    }).addTo(state.regionLayer);
+
+    // 2. 도시대기 측정소
     const urbanIcon = L.divIcon({
       className: "",
       html: `<div class="urban-pin"></div>`,
@@ -256,7 +902,7 @@
         `복합 가스 위험지수: <b>${region.urban.risk_mean}점</b>`
     );
 
-    // 3. 도로변 대기측정소 (붉은색 펄스 마커)
+    // 3. 도로변 대기측정소 (펄스)
     const roadIcon = L.divIcon({
       className: "",
       html: `<div class="pulse-marker-wrap"><div class="pulse-ring"></div><div class="pulse-core"></div></div>`,
@@ -276,8 +922,8 @@
         `※ KF94 마스크 가스 방어율 0% (100% 투과)`
     );
 
-    // 4. 지자체 이동노동자 쉼터 (파란색 쉴드 마커)
-    region.shelters.forEach((sh) => {
+    // 4. 지자체 이동노동자 쉼터
+    region.shelters.forEach((sh, idx) => {
       const shIcon = L.divIcon({
         className: "",
         html: `<div class="shelter-pin" title="${sh.name}">🛡️</div>`,
@@ -285,7 +931,10 @@
         iconAnchor: [14, 14],
       });
       const sm = L.marker(sh.coords, { icon: shIcon, zIndexOffset: 400 }).addTo(state.regionLayer);
-      sm.bindTooltip(`이동노동자 쉼터: ${sh.name}`, { direction: "top", offset: [0, -12] });
+      sm.bindTooltip(`이동노동자 쉼터: ${sh.name}${idx === 0 ? " (경유 시 -18점 환기)" : ""}`, {
+        direction: "top",
+        offset: [0, -12],
+      });
       sm.bindPopup(
         `<strong>🛡️ ${sh.name}</strong><br/>` +
           `위치: ${sh.address}<br/>` +
@@ -293,42 +942,435 @@
       );
     });
 
-    // 5. 배차 경로 전환 (기본: 붉은 대로변 점선 / 80점 돌파: 초록·시안 청정 외곽 순환 배차)
-    if (!isEscaped) {
-      const dangerPoly = L.polyline(region.danger_route, {
-        color: "#ef4444",
-        weight: 5,
-        opacity: 0.9,
-        dashArray: "10 8",
-      }).addTo(state.regionLayer);
-      dangerPoly.bindTooltip("고농도 매연 노출 대로변 상권 반복 루트", { sticky: true });
-      animateRiderAlongRoute(region.danger_route);
-    } else {
-      // 기존 위험 경로를 흐리게 남기고 청정 탈출 경로를 강렬하게 표시
-      L.polyline(region.danger_route, {
-        color: "#ef4444",
-        weight: 3,
-        opacity: 0.28,
-        dashArray: "6 8",
-      }).addTo(state.regionLayer);
+    // 5. 대로변 위험 루트 및 구간 노드
+    L.polyline(region.danger_route, {
+      color: "#ef4444",
+      weight: isEscaping ? 3 : 5,
+      opacity: isEscaping ? 0.32 : 0.88,
+      dashArray: "10 8",
+    })
+      .bindTooltip("고농도 매연 노출 대로변 상권 루트", { sticky: true })
+      .addTo(state.regionLayer);
 
-      const escapePoly = L.polyline(region.escape_route, {
-        color: "#10b981",
-        weight: 6,
-        opacity: 0.95,
-      }).addTo(state.regionLayer);
-      escapePoly.bindTooltip("지연 0분! 외곽 청정 주거권역 우선 순환 배차 루트", { sticky: true });
+    region.danger_route.forEach((pt, i) => {
+      const wpName = (region.danger_waypoints && region.danger_waypoints[i]) || `구간 ${i + 1}`;
+      L.circleMarker(pt, {
+        radius: 4,
+        color: "#fecaca",
+        fillColor: "#ef4444",
+        fillOpacity: isEscaping ? 0.35 : 0.85,
+        weight: 1.5,
+      })
+        .bindTooltip(`대로변 거점: ${wpName}`, { direction: "top" })
+        .addTo(state.regionLayer);
+    });
 
-      // 쉼터 경유 하이라이트 서클
+    // 6. 외곽 청정 순환 배차 루트 (대기 중엔 은은한 미리보기 점선, 발동 후 선명한 초록 실선)
+    const activeEsc = state.escapePath.length >= 2 ? state.escapePath : region.escape_route;
+    L.polyline(activeEsc, {
+      color: "#10b981",
+      weight: isEscaping ? 6 : 2.5,
+      opacity: isEscaping ? 0.95 : 0.32,
+      dashArray: isEscaping ? null : "4 6",
+    })
+      .bindTooltip("지연 0분! 외곽 청정 주거권역 우선 순환 배차 루트", { sticky: true })
+      .addTo(state.regionLayer);
+
+    if (isEscaping && region.shelters[0]) {
       L.circle(region.shelters[0].coords, {
-        radius: 140,
+        radius: 170,
         color: "#38bdf8",
         weight: 2,
         fillColor: "#38bdf8",
         fillOpacity: 0.22,
       }).addTo(state.regionLayer);
+    }
 
-      animateRiderAlongRoute(region.escape_route);
+    region.escape_route.forEach((pt, i) => {
+      const wpName = (region.escape_waypoints && region.escape_waypoints[i]) || `청정 거점 ${i + 1}`;
+      L.circleMarker(pt, {
+        radius: isEscaping ? 4.5 : 3.5,
+        color: "#a7f3d0",
+        fillColor: "#10b981",
+        fillOpacity: isEscaping ? 0.9 : 0.45,
+        weight: 1.5,
+      })
+        .bindTooltip(`청정 경로: ${wpName}`, { direction: "top" })
+        .addTo(state.regionLayer);
+    });
+  }
+
+  // 라이더 마커 및 주행 궤적 업데이트 (깜빡임 없이 부드럽게 위치/배지 갱신)
+  function ensureRiderMarker(region) {
+    if (!state.riderLayer || !region) return;
+    if (!state.riderLatLng) {
+      const startPt = region.danger_route[0];
+      state.riderLatLng = [startPt[0], startPt[1]];
+    }
+
+    if (!state.dangerTrailPoly) {
+      state.dangerTrailPoly = L.polyline(state.dangerTrailPoints, {
+        color: "#fbbf24",
+        weight: 3.2,
+        opacity: 0.78,
+      }).addTo(state.riderLayer);
+    }
+
+    if (!state.escapeTrailPoly) {
+      state.escapeTrailPoly = L.polyline(state.escapeTrailPoints, {
+        color: "#38bdf8",
+        weight: 4,
+        opacity: 0.9,
+      }).addTo(state.riderLayer);
+    }
+
+    if (!state.riderMarker) {
+      const icon = L.divIcon({
+        className: "",
+        html: `<div class="rider-marker-shell"><div id="mapRiderPin" class="rider-pin pin-safe">🛵</div><span id="mapRiderTag" class="rider-map-tag">0점</span></div>`,
+        iconSize: [54, 54],
+        iconAnchor: [18, 18],
+      });
+      state.riderMarker = L.marker(state.riderLatLng, {
+        icon,
+        draggable: true,
+        zIndexOffset: 950,
+      }).addTo(state.riderLayer);
+
+      state.riderMarker.bindPopup(
+        "<strong>라이더 김성원 (드래그 가능)</strong><br/>지도의 붉은 가스 포켓 안팎으로 끌어당겨 피폭·환기 변화를 즉시 테스트할 수 있습니다."
+      );
+
+      state.riderMarker.on("drag", (ev) => {
+        const ll = ev.target.getLatLng();
+        state.riderLatLng = [ll.lat, ll.lng];
+        if (state.routePhase === "idle") {
+          state.routePhase = "danger";
+        }
+        state.manualPositionHold = true;
+        state.customTarget = null;
+        state.currentSegmentLabel = "수동 드래그 위치 관측 중";
+        updateAllSimulatorVisuals(false);
+      });
+
+      state.riderMarker.on("dragend", (ev) => {
+        const ll = ev.target.getLatLng();
+        state.riderLatLng = [ll.lat, ll.lng];
+        state.manualPositionHold = true;
+        const evalRes = evaluateSpatialExposure(
+          state.dashboard.regions[state.activeRegionKey],
+          state.riderLatLng,
+          state.routePhase
+        );
+        addEventLog(
+          state.simMinutes,
+          `✋ 라이더 위치 이동 (${evalRes.pocketBadge}) — 변화율 ${evalRes.rate >= 0 ? "+" : ""}${evalRes.rate.toFixed(1)}점/분`,
+          evalRes.rate >= 0 ? "ev-danger" : "ev-escape"
+        );
+        updateAllSimulatorVisuals(false);
+      });
+    }
+  }
+
+  function updateRiderBadgeAppearance() {
+    const pinEl = document.getElementById("mapRiderPin");
+    const tagEl = document.getElementById("mapRiderTag");
+    const scoreInt = Math.round(state.simScore);
+    if (pinEl) {
+      pinEl.className = "rider-pin";
+      if (state.routePhase === "escaping" || state.routePhase === "recovered") {
+        pinEl.classList.add("pin-escape");
+      } else if (scoreInt >= 80) {
+        pinEl.classList.add("pin-danger");
+      } else if (scoreInt >= 45) {
+        pinEl.classList.add("pin-warn");
+      } else {
+        pinEl.classList.add("pin-safe");
+      }
+    }
+    if (tagEl) {
+      const rateSign = state.lastDeltaPerMin > 0.05 ? "▲" : state.lastDeltaPerMin < -0.05 ? "▼" : "";
+      tagEl.textContent = `${scoreInt}점 ${rateSign}`;
+    }
+  }
+
+  function updateRiderMapVisuals(region) {
+    ensureRiderMarker(region);
+    if (state.riderMarker && state.riderLatLng) {
+      state.riderMarker.setLatLng(state.riderLatLng);
+    }
+    if (state.dangerTrailPoly) {
+      state.dangerTrailPoly.setLatLngs(state.dangerTrailPoints);
+    }
+    if (state.escapeTrailPoly) {
+      state.escapeTrailPoly.setLatLngs(state.escapeTrailPoints);
+    }
+    updateRiderBadgeAppearance();
+  }
+
+  // --- 실시간 SVG 피폭·환기 추이 그래프 렌더링 ---
+  function renderTrendChart() {
+    const svg = document.getElementById("simTrendSvg");
+    if (!svg) return;
+    const hist = state.simHistory;
+    const W = 360;
+    const H = 78;
+    const padX = 6;
+    const yOf = (sc) => 73 - (clamp(sc, 0, 100) / 100) * 67; // 0->73, 100->6, 80->19.4
+
+    // 동적 임계치 라인 위치 보정
+    const threshLine = svg.querySelector("line");
+    const threshText = svg.querySelector("text");
+    if (threshLine) {
+      const y80 = yOf(80).toFixed(1);
+      threshLine.setAttribute("y1", y80);
+      threshLine.setAttribute("y2", y80);
+      if (threshText) threshText.setAttribute("y", (yOf(80) - 3).toFixed(1));
+    }
+
+    const areaEl = document.getElementById("simTrendArea");
+    const pathEl = document.getElementById("simTrendPath");
+    const markersEl = document.getElementById("simTrendMarkers");
+
+    if (!hist || hist.length < 2) {
+      if (areaEl) areaEl.setAttribute("d", "");
+      if (pathEl) pathEl.setAttribute("d", "");
+      if (markersEl) markersEl.innerHTML = "";
+      return;
+    }
+
+    const maxMin = Math.max(hist[hist.length - 1].min, 15);
+    const xOf = (m) => padX + (m / maxMin) * (W - padX * 2);
+
+    const pts = hist.map((p) => ({
+      x: xOf(p.min),
+      y: yOf(p.score),
+      phase: p.phase,
+      event: p.event,
+      score: p.score,
+    }));
+
+    const dispatchIdx = pts.findIndex((p) => p.event === "dispatch" || p.phase === "escaping" || p.phase === "recovered");
+    const dangerPts = dispatchIdx > 0 ? pts.slice(0, dispatchIdx + 1) : dispatchIdx === 0 ? [] : pts;
+    const escapePts = dispatchIdx >= 0 ? pts.slice(dispatchIdx) : [];
+
+    const toLine = (arr) => arr.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+    const toArea = (arr) =>
+      arr.length >= 2
+        ? `${toLine(arr)} L${arr[arr.length - 1].x.toFixed(1)},73 L${arr[0].x.toFixed(1)},73 Z`
+        : "";
+
+    const isEsc = state.routePhase === "escaping" || state.routePhase === "recovered";
+    if (pathEl) {
+      pathEl.setAttribute("d", toLine(dangerPts));
+      pathEl.setAttribute("stroke", "#f87171");
+    }
+    if (areaEl) {
+      areaEl.setAttribute("d", toArea(dangerPts));
+      areaEl.setAttribute("fill", "rgba(239, 68, 68, 0.16)");
+    }
+
+    if (markersEl) {
+      markersEl.innerHTML = "";
+      if (escapePts.length >= 2) {
+        const escArea = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        escArea.setAttribute("d", toArea(escapePts));
+        escArea.setAttribute("fill", "rgba(16, 185, 129, 0.18)");
+        markersEl.appendChild(escArea);
+
+        const escPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        escPath.setAttribute("d", toLine(escapePts));
+        escPath.setAttribute("fill", "none");
+        escPath.setAttribute("stroke", "#10b981");
+        escPath.setAttribute("stroke-width", "2.4");
+        escPath.setAttribute("stroke-linecap", "round");
+        escPath.setAttribute("stroke-linejoin", "round");
+        markersEl.appendChild(escPath);
+      }
+
+      pts.forEach((p, idx) => {
+        if (p.event === "dispatch") {
+          const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          c.setAttribute("cx", p.x.toFixed(1));
+          c.setAttribute("cy", p.y.toFixed(1));
+          c.setAttribute("r", "4");
+          c.setAttribute("fill", "#ef4444");
+          c.setAttribute("stroke", "#fef08a");
+          c.setAttribute("stroke-width", "1.5");
+          markersEl.appendChild(c);
+        } else if (p.event === "shelter") {
+          const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          c.setAttribute("cx", p.x.toFixed(1));
+          c.setAttribute("cy", p.y.toFixed(1));
+          c.setAttribute("r", "4");
+          c.setAttribute("fill", "#38bdf8");
+          c.setAttribute("stroke", "#ffffff");
+          c.setAttribute("stroke-width", "1.5");
+          markersEl.appendChild(c);
+        } else if (idx === pts.length - 1) {
+          const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          c.setAttribute("cx", p.x.toFixed(1));
+          c.setAttribute("cy", p.y.toFixed(1));
+          c.setAttribute("r", "3.5");
+          c.setAttribute("fill", isEsc ? "#34d399" : "#fb7185");
+          markersEl.appendChild(c);
+        }
+      });
+    }
+  }
+
+  // --- 시뮬레이터 패널 전체 UI 동기화 ---
+  function updateAllSimulatorVisuals(syncMap = true) {
+    if (!state.dashboard) return;
+    const region = state.dashboard.regions[state.activeRegionKey];
+    if (!region) return;
+
+    const evalRes = evaluateSpatialExposure(
+      region,
+      state.riderLatLng || region.danger_route[0],
+      state.routePhase
+    );
+
+    const scoreInt = Math.round(state.simScore);
+    const minInt = Math.round(state.simMinutes);
+
+    // 헤더 배지
+    const badgeEl = document.getElementById("simStepBadge");
+    if (state.routePhase === "idle") {
+      badgeEl.textContent = "대기 (0분)";
+    } else if (state.routePhase === "danger") {
+      badgeEl.textContent = `대로변 주행 (${minInt}분)`;
+    } else if (state.routePhase === "escaping") {
+      badgeEl.textContent = `청정 탈출 중 (${minInt}분)`;
+    } else {
+      badgeEl.textContent = `회복 완료 (${minInt}분)`;
+    }
+
+    // 상태 필 & ESG 누적 포인트
+    const phasePill = document.getElementById("riderPhasePill");
+    phasePill.className = "rider-tag";
+    if (state.routePhase === "idle") {
+      phasePill.textContent = "대기 중";
+    } else if (state.routePhase === "danger") {
+      phasePill.textContent = "대로변 피폭 관제";
+      phasePill.classList.add("tag-danger");
+    } else if (state.routePhase === "escaping") {
+      phasePill.textContent = "청정 순환 탈출";
+      phasePill.classList.add("tag-escape");
+    } else {
+      phasePill.textContent = "청정 안착 완료";
+    }
+    document.getElementById("esgScoreBadge").textContent =
+      `누적 ${state.esgPoints.toLocaleString()}P · 탈출 ${state.escapeCount}회`;
+
+    document.getElementById("simSegmentName").textContent =
+      state.currentSegmentLabel || `${region.danger_waypoints[0]} (출발 대기)`;
+
+    // 포켓 거리 & 변화율 바
+    const distEl = document.getElementById("simPocketDist");
+    distEl.textContent = evalRes.pocketBadge;
+    distEl.className = `sp-val ${evalRes.zoneClass}`;
+
+    const deltaEl = document.getElementById("simDeltaRate");
+    if (state.routePhase === "idle") {
+      deltaEl.textContent = "0.0점/분 (대기 중)";
+      deltaEl.className = "sp-val text-slate";
+    } else if (state.routePhase === "recovered") {
+      deltaEl.textContent = "0.0점/분 (회복 완료)";
+      deltaEl.className = "sp-val text-emerald";
+    } else if (evalRes.rate > 0.05) {
+      deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 피폭 누적`;
+      deltaEl.className = evalRes.rate > 2.2 ? "sp-val text-rose" : "sp-val text-amber";
+    } else {
+      deltaEl.textContent = `${evalRes.rate.toFixed(1)}점/분 ▼ 호흡기 환기`;
+      deltaEl.className = "sp-val text-emerald";
+    }
+
+    // 게이지 바
+    const scoreEl = document.getElementById("gaugeScoreText");
+    scoreEl.textContent = `${scoreInt}점 / 100점`;
+    scoreEl.style.color = scoreInt >= 80 ? "#f87171" : scoreInt >= 50 ? "#fbbf24" : "#34d399";
+    document.getElementById("gaugeFill").style.width = `${clamp(state.simScore, 0, 100)}%`;
+
+    // 텔레메트리 (국소 NO2, CO-Hb, 뇌 산소/졸음 경보)
+    document.getElementById("teleNo2").textContent = `${evalRes.localNo2.toFixed(4)} ppm`;
+    const cohb = (0.7 + (state.simScore / 100) * 4.9).toFixed(1);
+    document.getElementById("teleCohb").textContent = `${cohb} %`;
+
+    const alertEl = document.getElementById("teleAlertLevel");
+    if (state.routePhase === "recovered" || (state.routePhase === "escaping" && scoreInt < 40)) {
+      alertEl.textContent = "🟢 정상 회복 (환기 양호)";
+      alertEl.className = "tele-val text-emerald";
+    } else if (state.routePhase === "escaping") {
+      alertEl.textContent = "🔵 환기 회복 중 (이탈)";
+      alertEl.className = "tele-val text-sky";
+    } else if (scoreInt >= 80) {
+      alertEl.textContent = "🚨 위험 (졸음·추돌 고위험)";
+      alertEl.className = "tele-val text-rose";
+    } else if (scoreInt >= 55) {
+      alertEl.textContent = "🟠 경고 (경미한 두통·피로)";
+      alertEl.className = "tele-val text-amber";
+    } else if (scoreInt >= 25) {
+      alertEl.textContent = "🟡 주의 (초기 기도 자극)";
+      alertEl.className = "tele-val text-sky";
+    } else {
+      alertEl.textContent = "🟢 정상 (집중 양호)";
+      alertEl.className = "tele-val text-emerald";
+    }
+
+    // 수동 순환배차 버튼 활성화 여부
+    const manualBtn = document.getElementById("btnManualEscape");
+    if (manualBtn) {
+      manualBtn.disabled = state.routePhase === "escaping" || state.routePhase === "recovered";
+    }
+
+    // 순환 배차 승인 & 회복 카드
+    const approvalCard = document.getElementById("dispatchApprovalCard");
+    const mapOverlay = document.getElementById("mapDispatchOverlay");
+    const call = region.escape_call;
+
+    if (state.routePhase === "escaping" || state.routePhase === "recovered") {
+      const isRec = state.routePhase === "recovered";
+      const pill = document.getElementById("dispatchPill");
+      pill.textContent = isRec
+        ? "✅ 청정 권역 안착 & 호흡기 환기 완료"
+        : "🚨 순환 배차 가동 · 외곽 청정 환기 중";
+      pill.classList.toggle("pill-recovered", isRec);
+
+      document.getElementById("dispatchHeadline").textContent = isRec
+        ? `✅ 청정 권역 안착 완료! 가스 게이지 ${state.peakScoreBeforeEscape}점 → ${scoreInt}점 회복 (지연 0분)`
+        : `🚨 순환 배차 전환 (${state.peakScoreBeforeEscape}점 → 현재 ${scoreInt}점 하락 중) · '${call.order_title}'`;
+      document.getElementById("dispatchOrderTitle").textContent = call.order_title;
+      document.getElementById("dispatchDelay").textContent = call.delay_note;
+      document.getElementById("dispatchShelter").textContent = state.shelterVisited
+        ? `${call.shelter_name} · 환기 휴식 -18점 완료`
+        : `${call.shelter_name} · 경유 예정 (-18점 환기)`;
+      document.getElementById("rewardPointsChip").textContent = isRec
+        ? `🌿 그린 배차 포인트 ${call.green_points} 지급 완료`
+        : `🌿 도착 시 그린 포인트 ${call.green_points} 지급`;
+
+      document.getElementById("mapOverlayBadge").textContent = isRec
+        ? "청정 권역 환기 회복 완료"
+        : "AI 권역 탈출 순환 배차 가동";
+      document.getElementById("mapOverlayTitle").textContent = isRec
+        ? `[${region.name}] ${state.peakScoreBeforeEscape}점 → ${scoreInt}점 회복 완료 (+500P)`
+        : `[${region.name}] 외곽 청정 순환 배차 주행 중 (현재 ${scoreInt}점 ▼)`;
+      document.getElementById("mapOverlayDesc").textContent =
+        `배달 지연 ${call.delay_minutes}분 · ${call.shelter_name}`;
+
+      approvalCard.classList.remove("hidden");
+      mapOverlay.classList.remove("hidden");
+    } else {
+      approvalCard.classList.add("hidden");
+      mapOverlay.classList.add("hidden");
+    }
+
+    updatePlayButtonUI();
+    renderTrendChart();
+    if (syncMap) {
+      updateRiderMapVisuals(region);
+    } else {
+      updateRiderBadgeAppearance();
     }
   }
 
@@ -338,12 +1380,10 @@
     const region = state.dashboard.regions[state.activeRegionKey];
     if (!region) return;
 
-    // 탭 active 상태
     document.querySelectorAll(".region-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.region === state.activeRegionKey);
     });
 
-    // KPI 업데이트
     document.getElementById("kpiUrbanName").textContent = region.urban.stationName;
     document.getElementById("kpiUrbanPm10").textContent = `${region.urban.pm10_mean} ㎍/㎥`;
     document.getElementById("kpiUrbanGrade").textContent = region.urban.weather_grade;
@@ -361,17 +1401,19 @@
     document.getElementById("kpiRiskSub").textContent =
       `24h 평균 ${region.road.risk_mean}점 (도시대기 대비 +${region.road.gap_risk_pct}%)`;
 
-    // 지도 부제 및 이동
     document.getElementById("mapSubtitle").textContent =
       `${region.name} · ${region.urban.stationName}(도시대기) vs ${region.road.displayName} 격차 분석`;
-    document.getElementById("simZoneName").textContent = `도심 대로변 밀집 상권 (${region.road.displayName})`;
+    document.getElementById("simZoneName").textContent = region.road.displayName;
+
+    populateHourSelect(region);
 
     if (fly && state.map) {
       state.map.flyTo(region.center, region.zoom, { duration: 0.7 });
     }
-    renderRegionMap(region);
 
-    // AI 브리핑 3줄 업데이트
+    // 권역 전환 시 해당 권역 출발점으로 초기화
+    resetRouteForNextRound(region, true);
+
     const list = document.getElementById("aiBriefingList");
     list.innerHTML = "";
     region.ai_briefing.forEach((line) => {
@@ -379,65 +1421,6 @@
       li.textContent = line;
       list.appendChild(li);
     });
-
-    renderSimulatorState(false);
-  }
-
-  // --- 시뮬레이터 게이지 및 80점 돌파 순환 배차 카드 ---
-  function renderSimulatorState(triggerAudio = false) {
-    if (!state.dashboard) return;
-    const region = state.dashboard.regions[state.activeRegionKey];
-    const stepInfo = SIM_STEPS[state.simStep];
-    state.simScore = stepInfo.score;
-
-    document.getElementById("simStepBadge").textContent = stepInfo.badge;
-
-    const scoreEl = document.getElementById("gaugeScoreText");
-    scoreEl.textContent = `${state.simScore}점 / 100점`;
-    scoreEl.style.color =
-      state.simScore >= 80 ? "#f87171" : state.simScore >= 60 ? "#fbbf24" : "#34d399";
-
-    document.getElementById("gaugeFill").style.width = `${state.simScore}%`;
-
-    const estNo2 = (region.road.no2_mean * stepInfo.no2Multiplier).toFixed(4);
-    document.getElementById("teleNo2").textContent = `${estNo2} ppm`;
-    document.getElementById("teleCohb").textContent = stepInfo.cohb;
-
-    const alertEl = document.getElementById("teleAlertLevel");
-    alertEl.textContent = stepInfo.alertText;
-    alertEl.className = `tele-val ${stepInfo.alertClass}`;
-
-    const approvalCard = document.getElementById("dispatchApprovalCard");
-    const mapOverlay = document.getElementById("mapDispatchOverlay");
-
-    if (state.simScore >= 80) {
-      const call = region.escape_call;
-      document.getElementById("dispatchHeadline").textContent =
-        `🚨 가스 누적 임계치(${state.simScore}점) 도달! '외곽 청정 주거권역 행' 우선 순환 배차 발동`;
-      document.getElementById("dispatchOrderTitle").textContent = call.order_title;
-      document.getElementById("dispatchDelay").textContent = call.delay_note;
-      document.getElementById("dispatchShelter").textContent = call.shelter_name;
-
-      document.getElementById("mapOverlayTitle").textContent =
-        `[${region.name}] 외곽 청정 주거권역 행 순환 배차 전환 완료`;
-      document.getElementById("mapOverlayDesc").textContent =
-        `배달 지연 ${call.delay_minutes}분 · ${call.shelter_name} · 그린 포인트 ${call.green_points}`;
-
-      approvalCard.classList.remove("hidden");
-      mapOverlay.classList.remove("hidden");
-
-      if (triggerAudio) {
-        playEmergencyChime();
-      }
-    } else {
-      approvalCard.classList.add("hidden");
-      mapOverlay.classList.add("hidden");
-      if (triggerAudio && state.simStep > 0) {
-        playStepTick(state.simStep);
-      }
-    }
-
-    renderRegionMap(region);
   }
 
   // --- 헤더 메타 배지 & data.csv 테이블 렌더링 ---
@@ -576,19 +1559,70 @@
       });
     });
 
-    document.getElementById("btnSimStep").addEventListener("click", () => {
-      if (state.simStep < SIM_STEPS.length - 1) {
-        state.simStep += 1;
-        renderSimulatorState(true);
-      } else {
-        // 92점 상태에서 다시 누르면 경고 재알림
-        playEmergencyChime();
+    // 시간대 변경 (00시~23시 실측 data.csv 연동)
+    document.getElementById("simHourSelect").addEventListener("change", (e) => {
+      state.simHour = Number(e.target.value);
+      if (state.dashboard) {
+        const region = state.dashboard.regions[state.activeRegionKey];
+        updateHourContextPill(region);
+        const hd = getHourData(region, state.simHour);
+        addEventLog(
+          state.simMinutes,
+          `🕒 운행 시간대 변경 → ${hd.label} (도로변 위험지수 ${hd.road_risk}점 반영)`,
+          ""
+        );
+        updateAllSimulatorVisuals(false);
       }
     });
 
+    // 배속 버튼
+    document.querySelectorAll(".speed-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.simSpeed = Number(btn.dataset.speed) || 1;
+        document.querySelectorAll(".speed-btn").forEach((b) => {
+          b.classList.toggle("active", b === btn);
+        });
+      });
+    });
+
+    // 실시간 연속 주행 시작/일시정지
+    document.getElementById("btnSimPlayPause").addEventListener("click", () => {
+      if (state.simRunning) {
+        stopContinuousLoop();
+      } else {
+        startContinuousLoop();
+      }
+    });
+
+    // +30분 구간 주행 (구간별 물리 적분 + 80점 돌파 시점에서 잠시 정지해 알림 확인 가능)
+    document.getElementById("btnSimStep").addEventListener("click", () => {
+      stepSimulation(30, { stopOnEscapeTrigger: true });
+    });
+
+    // 수동 순환배차 전환
+    document.getElementById("btnManualEscape").addEventListener("click", () => {
+      if (!state.dashboard) return;
+      const region = state.dashboard.regions[state.activeRegionKey];
+      activateCircularEscape(region, true);
+      if (!state.simRunning) {
+        startContinuousLoop();
+      }
+      updateAllSimulatorVisuals();
+    });
+
+    // 초기화
     document.getElementById("btnSimReset").addEventListener("click", () => {
-      state.simStep = 0;
-      renderSimulatorState(false);
+      if (!state.dashboard) return;
+      resetRouteForNextRound(state.dashboard.regions[state.activeRegionKey], true);
+    });
+
+    // 지도 클릭 주행 토글
+    document.getElementById("btnMapClickDrive").addEventListener("click", (e) => {
+      state.mapClickMode = !state.mapClickMode;
+      e.target.textContent = state.mapClickMode ? "📍 지도 클릭 주행: ON" : "📍 지도 클릭 주행: OFF";
+      e.target.classList.toggle("btn-mini-active", state.mapClickMode);
+      const mapEl = document.getElementById("dispatchMap");
+      if (mapEl) mapEl.classList.toggle("map-click-active", state.mapClickMode);
     });
 
     document.getElementById("btnToggleAudio").addEventListener("click", (e) => {
@@ -612,7 +1646,7 @@
     document.getElementById("csvSearchInput").addEventListener("input", renderCsvTable);
     document.getElementById("csvMangFilter").addEventListener("change", renderCsvTable);
 
-    // R 코드 모달 (Flask API 우선, GitHub Pages 정적 환경에서는 analysis.R 직접 로드)
+    // R 코드 모달
     const rModal = document.getElementById("rCodeModal");
     document.getElementById("btnViewRCode").addEventListener("click", async () => {
       rModal.classList.remove("hidden");
@@ -637,7 +1671,9 @@
       if (state.rCodeCached && navigator.clipboard) {
         await navigator.clipboard.writeText(state.rCodeCached);
         e.target.textContent = "복사 완료!";
-        setTimeout(() => { e.target.textContent = "코드 복사"; }, 1500);
+        setTimeout(() => {
+          e.target.textContent = "코드 복사";
+        }, 1500);
       }
     });
     document.getElementById("btnCloseRModal").addEventListener("click", () => rModal.classList.add("hidden"));

@@ -79,6 +79,7 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
         "road_display": "강남대로 (대로변)",
         "center": [37.5015, 127.0335],
         "zoom": 13.5,
+        "pocket_radius_m": 600,
         "shelters": [
             {
                 "name": "서초 휴서울 이동노동자 쉼터",
@@ -101,6 +102,14 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
             [37.4925, 127.0303],  # 우성아파트 사거리
             [37.4846, 127.0342],  # 양재역
         ],
+        "danger_waypoints": [
+            "신사역 사거리",
+            "논현역",
+            "신논현역 (가스포켓 진입)",
+            "강남역 사거리 (포켓 중심)",
+            "우성아파트 사거리",
+            "양재역 회차지",
+        ],
         "escape_route": [
             [37.5008, 127.0264],  # 강남대로 이탈 출발
             [37.4960, 127.0235],  # 서초대로 이면 진입
@@ -108,6 +117,14 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
             [37.4868, 127.0285],  # 양재천 수변로 진입
             [37.4835, 127.0432],  # 도곡·개포 청정 주거권역
             [37.4892, 127.0538],  # 대치·개포 청정 배달 완료지
+        ],
+        "escape_waypoints": [
+            "강남대로 이탈",
+            "서초대로 이면길",
+            "서초 이동노동자 쉼터",
+            "양재천 수변 청정로",
+            "도곡·개포 주거단지",
+            "대치·개포 청정 주거지",
         ],
         "escape_call": {
             "order_title": "도곡·개포 양재천변 청정 주거단지 행 우선 배차 매칭",
@@ -129,6 +146,7 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
         "road_display": "신촌로·홍대입구 (도로변)",
         "center": [37.5565, 126.9255],
         "zoom": 13.5,
+        "pocket_radius_m": 620,
         "shelters": [
             {
                 "name": "마포 휴서울 이동노동자 쉼터 (합정)",
@@ -150,6 +168,13 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
             [37.5567, 126.9460],  # 이대역
             [37.5574, 126.9562],  # 아현역
         ],
+        "danger_waypoints": [
+            "합정역 사거리",
+            "홍대입구역 상권",
+            "신촌로 (가스포켓 중심)",
+            "이대역 대로변",
+            "아현역 회차지",
+        ],
         "escape_route": [
             [37.5558, 126.9369],  # 신촌로 이탈 출발
             [37.5582, 126.9265],  # 연남동 숲길 진입
@@ -157,6 +182,14 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
             [37.5498, 126.9142],  # 마포 합정 이동노동자 쉼터 경유
             [37.5562, 126.9038],  # 망원 한강·성산 청정 주거권역
             [37.5648, 126.8982],  # 상암·성산 청정 배달 완료지
+        ],
+        "escape_waypoints": [
+            "신촌로 이탈",
+            "연남동 경의선숲길",
+            "망원·서교 이면길",
+            "마포 합정 이동노동자 쉼터",
+            "망원·성산 주거단지",
+            "상암·성산 청정 주거지",
         ],
         "escape_call": {
             "order_title": "망원·성산·연희 청정 주거단지 행 우선 배차 매칭",
@@ -178,6 +211,7 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
         "road_display": "청계천로·왕산로 (도로변)",
         "center": [37.5800, 127.0390],
         "zoom": 13.5,
+        "pocket_radius_m": 600,
         "shelters": [
             {
                 "name": "동대문구 이동노동자 쉼터 (용두·신설)",
@@ -200,6 +234,14 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
             [37.5804, 127.0468],  # 청량리역
             [37.5897, 127.0578],  # 회기·외대앞
         ],
+        "danger_waypoints": [
+            "동대문역 교차로",
+            "청계천로·신설동 (포켓 중심)",
+            "용두·동대문구청",
+            "제기동역 대로변",
+            "청량리역 환승축",
+            "회기·외대앞 회차지",
+        ],
         "escape_route": [
             [37.5706, 127.0220],  # 청계천로 이탈 출발
             [37.5748, 127.0332],  # 동대문 이동노동자 쉼터 경유
@@ -207,6 +249,14 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
             [37.5818, 127.0565],  # 배봉산 공원 청정 외곽로
             [37.5855, 127.0672],  # 장안·중랑천변 청정 주거단지
             [37.5912, 127.0695],  # 휘경·중랑천 청정 배달 완료지
+        ],
+        "escape_waypoints": [
+            "청계천로 이탈",
+            "동대문구 이동노동자 쉼터",
+            "전농동 주거권 진입",
+            "배봉산 공원 청정로",
+            "장안·중랑천 주거단지",
+            "휘경·중랑천 청정 주거지",
         ],
         "escape_call": {
             "order_title": "배봉산·장안·중랑천변 청정 주거단지 행 우선 배차 매칭",
@@ -327,6 +377,40 @@ def build_dashboard_payload() -> dict[str, Any]:
         u_coords = SEOUL_STATION_COORDS.get(u_name, (cfg["center"][0], cfg["center"][1]))
         r_coords = SEOUL_STATION_COORDS.get(r_name, (cfg["center"][0], cfg["center"][1]))
 
+        # 시간대별(00~23시) 실측 농도 및 위험지수 테이블 (공간 주행 시뮬레이터 연동용)
+        du_h = (
+            du.groupby("hour")[["no2Value", "coValue", "o3Value", "gas_risk"]]
+            .mean()
+            .reindex(range(24))
+            .interpolate()
+            .bfill()
+            .ffill()
+        )
+        dr_h = (
+            dr.groupby("hour")[["no2Value", "coValue", "o3Value", "gas_risk"]]
+            .mean()
+            .reindex(range(24))
+            .interpolate()
+            .bfill()
+            .ffill()
+        )
+        hourly_readings = []
+        for h in range(24):
+            hourly_readings.append(
+                {
+                    "hour": h,
+                    "label": f"{h:02d}시",
+                    "urban_no2": round(float(du_h.loc[h, "no2Value"]), 4),
+                    "urban_co": round(float(du_h.loc[h, "coValue"]), 2),
+                    "urban_o3": round(float(du_h.loc[h, "o3Value"]), 4),
+                    "urban_risk": round(float(du_h.loc[h, "gas_risk"]), 1),
+                    "road_no2": round(float(dr_h.loc[h, "no2Value"]), 4),
+                    "road_co": round(float(dr_h.loc[h, "coValue"]), 2),
+                    "road_o3": round(float(dr_h.loc[h, "o3Value"]), 4),
+                    "road_risk": round(float(dr_h.loc[h, "gas_risk"]), 1),
+                }
+            )
+
         regions_out[key] = {
             **cfg,
             "urban": {
@@ -362,6 +446,7 @@ def build_dashboard_payload() -> dict[str, Any]:
                 "gap_co_pct": gap_co_pct,
                 "gap_risk_pct": gap_risk_pct,
             },
+            "hourly_readings": hourly_readings,
             "ai_briefing": ai_briefing,
         }
 
