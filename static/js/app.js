@@ -307,8 +307,22 @@
     const pill = document.getElementById("simHourContext");
     if (!pill || !region) return;
     const hd = getHourData(region, state.simHour);
-    pill.textContent = `도로변 ${hd.road_risk}점 vs 도시 ${hd.urban_risk}점`;
+    const lvl =
+      hd.road_risk >= 95
+        ? "큰길 매연 매우 심함"
+        : hd.road_risk >= 75
+        ? "큰길 매연 심함"
+        : hd.road_risk >= 55
+        ? "큰길 매연 보통"
+        : "새벽 공기 양호";
+    pill.textContent = `${lvl} (${Math.round(hd.road_risk)}점)`;
+    pill.title = `도로변 위험지수 ${hd.road_risk}점 vs 동네 ${hd.urban_risk}점`;
     pill.classList.toggle("pill-cool", hd.road_risk < 75);
+  }
+
+  function formatRiderDist(meters) {
+    if (meters >= 1000) return `${(meters / 1000).toFixed(1)}km`;
+    return `${Math.round(meters)}m`;
   }
 
   // --- 공간 좌표 기반 피폭 / 환기 변화율 계산 ---
@@ -320,18 +334,21 @@
     const trafficFactor = clamp(hd.road_risk / 68, 0.55, 1.5);
     const cleanFactor = clamp(65 / Math.max(hd.urban_risk, 35), 0.75, 1.35);
 
-    // 1. 국소 실시간 흡입 NO2 (포켓 거리 기반 연속 보간)
+    // 1. 국소 실시간 흡입 가스 (포켓 거리 기반 연속 보간)
     const pocketRatio = clamp(1 - distPocket / (pocketR * 1.4), 0, 1);
     const localNo2 = hd.urban_no2 + (hd.road_no2 * 1.12 - hd.urban_no2) * pocketRatio;
+    const baseUrbanNo2 = Math.max(hd.urban_no2, 0.006);
 
     if (phase === "recovered") {
+      const cleanNo2 = hd.urban_no2 * 0.92;
       return {
         distPocket,
         rate: 0,
-        localNo2: hd.urban_no2 * 0.92,
-        zoneText: "청정 권역 안착 완료",
+        localNo2: cleanNo2,
+        ratioVsUrban: cleanNo2 / baseUrbanNo2,
+        zoneText: "맑은 동네 도착 완료",
         zoneClass: "text-emerald",
-        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 청정 외곽`,
+        pocketBadge: `${formatRiderDist(distPocket)} · 맑은 동네`,
       };
     }
 
@@ -341,9 +358,10 @@
           distPocket,
           rate: -0.75,
           localNo2,
-          zoneText: "포켓 중심 이탈 중 (감소 전환)",
+          ratioVsUrban: localNo2 / baseUrbanNo2,
+          zoneText: "매연 구간 빠져나가는 중",
           zoneClass: "text-sky",
-          pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 탈출 시작`,
+          pocketBadge: `${formatRiderDist(distPocket)} · 빠져나가는 중`,
         };
       }
       if (distPocket <= pocketR) {
@@ -351,30 +369,35 @@
           distPocket,
           rate: -1.85,
           localNo2,
-          zoneText: "포켓 경계 탈출 · 환기 개시",
+          ratioVsUrban: localNo2 / baseUrbanNo2,
+          zoneText: "매연 경계 탈출 · 공기 맑아짐",
           zoneClass: "text-emerald",
-          pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 경계 이탈`,
+          pocketBadge: `${formatRiderDist(distPocket)} · 공기 맑아짐`,
         };
       }
+      const escCleanNo2 = hd.urban_no2 * 0.94;
       return {
         distPocket,
         rate: -2.85 * cleanFactor,
-        localNo2: hd.urban_no2 * 0.94,
-        zoneText: "청정 외곽 순환 · 호흡기 환기",
+        localNo2: escCleanNo2,
+        ratioVsUrban: escCleanNo2 / baseUrbanNo2,
+        zoneText: "맑은 동네 순환 · 숨 트이는 중",
         zoneClass: "text-emerald",
-        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 청정 외곽`,
+        pocketBadge: `${formatRiderDist(distPocket)} · 맑은 외곽`,
       };
     }
 
     // "idle" 또는 "danger" (혹은 지도 드래그 테스트)
     if (distPocket <= pocketR * 0.55) {
+      const coreNo2 = hd.road_no2 * 1.15;
       return {
         distPocket,
         rate: 3.35 * trafficFactor,
-        localNo2: hd.road_no2 * 1.15,
-        zoneText: "가스 포켓 중심 관통 (피폭 급증)",
+        localNo2: coreNo2,
+        ratioVsUrban: coreNo2 / baseUrbanNo2,
+        zoneText: "매연 한가운데 관통 (가장 독함)",
         zoneClass: "text-rose",
-        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 코어`,
+        pocketBadge: `${formatRiderDist(distPocket)} · 한가운데!`,
       };
     }
     if (distPocket <= pocketR) {
@@ -382,29 +405,34 @@
         distPocket,
         rate: 2.05 * trafficFactor,
         localNo2,
-        zoneText: "히든 가스 포켓 진입 (피폭 상승)",
+        ratioVsUrban: localNo2 / baseUrbanNo2,
+        zoneText: "큰길 매연 집중 구간 진입",
         zoneClass: "text-amber",
-        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 내부`,
+        pocketBadge: `${formatRiderDist(distPocket)} · 매연 집중구간`,
       };
     }
     if (distRoad <= 380) {
+      const roadEdgeNo2 = hd.urban_no2 + (hd.road_no2 - hd.urban_no2) * 0.35;
       return {
         distPocket,
         rate: 0.55 * trafficFactor,
-        localNo2: hd.urban_no2 + (hd.road_no2 - hd.urban_no2) * 0.35,
-        zoneText: "대로변 외곽 진입 (완만 누적)",
+        localNo2: roadEdgeNo2,
+        ratioVsUrban: roadEdgeNo2 / baseUrbanNo2,
+        zoneText: "큰길 진입 (서서히 누적)",
         zoneClass: "text-sky",
-        pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 외곽`,
+        pocketBadge: `${formatRiderDist(distPocket)} · 큰길 진입`,
       };
     }
 
+    const outCleanNo2 = hd.urban_no2 * 0.92;
     return {
       distPocket,
       rate: -1.75 * cleanFactor,
-      localNo2: hd.urban_no2 * 0.92,
-      zoneText: "청정 주거권역 (자연 환기)",
+      localNo2: outCleanNo2,
+      ratioVsUrban: outCleanNo2 / baseUrbanNo2,
+      zoneText: "맑은 동네 (자연 회복)",
       zoneClass: "text-emerald",
-      pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 청정 외곽`,
+      pocketBadge: `${formatRiderDist(distPocket)} 밖 · 맑음`,
     };
   }
 
@@ -482,14 +510,14 @@
       playEmergencyChime();
       addEventLog(
         state.simMinutes,
-        `임계치 80점 돌파 (${Math.round(state.simScore)}점) — 지연 0분 외곽 순환 배차 자동 발동`,
+        `80점 넘어서 맑은 동네 콜로 자동 전환! (${Math.round(state.simScore)}점 · 배달 지연 0분)`,
         "ev-danger"
       );
     } else {
       playRecoveryChime();
       addEventLog(
         state.simMinutes,
-        `수동 순환 배차 전환 (${Math.round(state.simScore)}점) — ${region.escape_call.shelter_name} 경유 시작`,
+        `바로 맑은 동네 콜로 바꿨어요 (${Math.round(state.simScore)}점) — 쉼터 지나며 회복 중`,
         "ev-escape"
       );
     }
@@ -505,19 +533,19 @@
     if (!region) return;
 
     const { stopOnEscapeTrigger = false } = options;
-    const sliceSize = 0.4; // 0.4분 단위로 구간·포켓·쉼터 정밀 적분
+    const sliceSize = 0.4; // 0.4분 단위로 구간·매연 반경·쉼터 정밀 적분
     let rem = totalDtMin;
 
     if (state.routePhase === "idle") {
       state.routePhase = "danger";
       state.simHistory = [{ min: state.simMinutes, score: state.simScore, phase: "danger", event: null }];
       state.lastHistoryMin = state.simMinutes;
-      addEventLog(state.simMinutes, `🛵 ${region.danger_waypoints[0]} 출발 — 대로변 배달 콜 주행 시작`, "");
+      addEventLog(state.simMinutes, `🛵 ${region.danger_waypoints[0]} 출발 — 큰길 배달 시작`, "");
     } else if (state.routePhase === "recovered") {
-      // 다음 상권 콜 이어서 주행 시작
+      // 다음 배달 이어서 주행 시작
       resetRouteForNextRound(region, false);
       state.routePhase = "danger";
-      addEventLog(state.simMinutes, `🛵 다음 상권 배달 콜 주행 개시 (${region.danger_waypoints[0]})`, "");
+      addEventLog(state.simMinutes, `🛵 다음 배달 출발 (${region.danger_waypoints[0]})`, "");
     }
 
     while (rem > 1e-4) {
@@ -528,7 +556,7 @@
       if (state.customTarget) {
         const res = moveTowardTarget(state.riderLatLng, state.customTarget, 230 * dt);
         state.riderLatLng = res.pos;
-        state.currentSegmentLabel = "사용자 지정 지점 주행 중";
+        state.currentSegmentLabel = "찍어둔 지점으로 이동 중";
         if (res.arrived) {
           state.customTarget = null;
           state.manualPositionHold = true;
@@ -536,7 +564,7 @@
             state.riderLayer.removeLayer(state.targetMarker);
             state.targetMarker = null;
           }
-          addEventLog(state.simMinutes, "📍 지정 목적지 도착 — 현재 구역 공기 노출/환기 측정 중", "ev-shelter");
+          addEventLog(state.simMinutes, "📍 찍어둔 지점 도착 — 주변 공기 상태 확인 중", "ev-shelter");
         }
       } else if (state.routePhase === "danger") {
         if (!state.manualPositionHold) {
@@ -550,7 +578,7 @@
           state.dangerCursor = res.cursor;
           state.currentSegmentLabel = res.segLabel;
         } else {
-          state.currentSegmentLabel = "수동 배치 지점 정밀 관측 중";
+          state.currentSegmentLabel = "직접 옮긴 위치 확인 중";
         }
       } else if (state.routePhase === "escaping") {
         const res = advanceEscapePath(
@@ -574,7 +602,7 @@
             playRecoveryChime();
             addEventLog(
               state.simMinutes + dt,
-              `🛡️ ${region.shelters[0].name} 환기·산소 휴식 (-18점 즉시 회복!)`,
+              `🛡️ ${region.shelters[0].name} 잠깐 휴식 (-18점 바로 회복!)`,
               "ev-shelter"
             );
             pushHistorySample(state.simMinutes + dt, state.simScore, "escaping", "shelter");
@@ -582,9 +610,9 @@
         }
 
         if (res.finished) {
-          // 외곽 청정단지 도착 후 20점 이하까지 자연 환기 마감
+          // 맑은 동네 도착 후 20점 이하까지 자연 회복 마감
           if (state.simScore > 20) {
-            state.currentSegmentLabel = `${region.escape_waypoints[region.escape_waypoints.length - 1]} (청정 환기 마감)`;
+            state.currentSegmentLabel = `${region.escape_waypoints[region.escape_waypoints.length - 1]} (숨 돌리는 중)`;
             state.simScore = Math.max(16, state.simScore - 3.8 * dt);
             state.lastDeltaPerMin = -3.8;
             state.simMinutes += dt;
@@ -602,7 +630,7 @@
           pushHistorySample(state.simMinutes, state.simScore, "recovered", "complete");
           addEventLog(
             state.simMinutes,
-            `✅ ${region.escape_waypoints[region.escape_waypoints.length - 1]} 안착! 최종 ${Math.round(state.simScore)}점 회복 (+500P 지급)`,
+            `✅ ${region.escape_waypoints[region.escape_waypoints.length - 1]} 도착! 피로도 ${Math.round(state.simScore)}점 회복 (+500P 적립)`,
             "ev-escape"
           );
           playRecoveryChime();
@@ -627,13 +655,13 @@
       state.simScore = clamp(state.simScore + evalRes.rate * dt, floorScore, 100);
       state.simMinutes += dt;
 
-      // 가스 포켓 첫 진입 로그
+      // 매연 구간 첫 진입 로그
       const pocketR = region.pocket_radius_m || 600;
       if (state.routePhase === "danger" && !state.enteredPocketLogged && evalRes.distPocket <= pocketR) {
         state.enteredPocketLogged = true;
         addEventLog(
           state.simMinutes,
-          `${region.road.displayName} 가스 포켓(${pocketR}m) 진입 — 마스크 투과 피폭 가속`,
+          `${region.road.stationName} 매연 집중구간 진입 — 피로도가 빠르게 올라가요`,
           "ev-danger"
         );
       }
@@ -688,13 +716,13 @@
     if (!btn) return;
     btn.classList.toggle("is-running", state.simRunning);
     if (state.simRunning) {
-      btn.textContent = "⏸ 주행 일시정지";
+      btn.textContent = "⏸ 잠깐 멈추기";
     } else if (state.routePhase === "recovered") {
-      btn.textContent = "🛵 다음 상권 콜 주행";
+      btn.textContent = "🛵 다음 배달 시작하기";
     } else if (state.routePhase === "idle") {
-      btn.textContent = "▶ 실시간 구간 주행 시작";
+      btn.textContent = "▶ 실시간 주행 시작";
     } else {
-      btn.textContent = "▶ 실시간 주행 재개";
+      btn.textContent = "▶ 주행 이어서 하기";
     }
   }
 
@@ -735,7 +763,7 @@
       state.eventLog = [
         {
           time: "대기",
-          text: `${region ? region.danger_waypoints[0] : "출발지"} 대기 중 — 주행 시작 시 가스 포켓 통과에 따라 게이지가 실시간 반응합니다.`,
+          text: `${region ? region.danger_waypoints[0] : "출발지"} 대기 중 — 주행을 시작하면 매연 구간에 따라 피로도가 올라갑니다.`,
           cls: "",
         },
       ];
@@ -831,7 +859,7 @@
     }
     const btn = document.getElementById("btnTileToggle");
     if (btn) {
-      btn.textContent = mode === "dark" ? "지도 테마: 다크" : "지도 테마: 라이트";
+      btn.textContent = mode === "dark" ? "지도: 어둡게" : "지도: 밝게";
     }
   }
 
@@ -851,24 +879,25 @@
         weight: 1.5,
       });
       marker.bindPopup(
-        `<strong>${st.stationName}</strong> (${st.mangName})<br/>` +
-          `측정시각: ${st.dataTime}<br/>` +
-          `NO₂: <b>${st.no2Value} ppm</b> · CO: ${st.coValue} ppm · O₃: ${st.o3Value} ppm<br/>` +
-          `PM10: ${st.pm10Value} ㎍/㎥ · 위험지수: <b>${st.gasRisk}점</b>`
+        `<strong>${st.stationName}</strong> (${isRoad ? "큰길 측정소" : "동네 측정소"})<br/>` +
+          `피로 위험도: <b>${Math.round(st.gasRisk)}점</b> · ${st.gasRisk >= 80 ? "매연 주의" : "양호"}<br/>` +
+          `<span style="color:#64748B;font-size:11px;">측정(${st.dataTime}): NO₂ ${st.no2Value}ppm · PM10 ${st.pm10Value}㎍/㎥</span>`
       );
       marker.addTo(state.allStationsLayer);
     });
     state.allStationsLayer.addTo(state.map);
   }
 
-  // 정적 권역 레이어 렌더링 (측정소, 가스 포켓, 쉼터, 경로선, 구간 웨이포인트)
+  // 정적 권역 레이어 렌더링 (동네 기준, 큰길 매연 구간, 쉼터, 경로선)
   function renderRegionBaseLayers(region) {
     if (!state.regionLayer || !region) return;
     state.regionLayer.clearLayers();
     const isEscaping = state.routePhase === "escaping" || state.routePhase === "recovered";
     const pocketR = region.pocket_radius_m || 600;
+    const gapRatio = (1 + (region.road.gap_no2_pct || 0) / 100).toFixed(1);
+    const peakRatio = (1 + (region.road.gap_no2_peak_pct || 0) / 100).toFixed(1);
 
-    // 1. 도로변 히든 가스 포켓 원 (핵심 + 외곽 2단 시각화)
+    // 1. 큰길 매연 집중 구간 원 (핵심 + 외곽 2단 시각화)
     state.pocketCircle = L.circle(region.road.coords, {
       radius: pocketR,
       color: "#DC2626",
@@ -888,7 +917,7 @@
       interactive: false,
     }).addTo(state.regionLayer);
 
-    // 2. 도시대기 측정소
+    // 2. 동네 공기 기준 (도시대기 측정소)
     const urbanIcon = L.divIcon({
       className: "",
       html: `<div class="urban-pin"></div>`,
@@ -897,17 +926,16 @@
     });
     const urbanMarker = L.marker(region.urban.coords, { icon: urbanIcon }).addTo(state.regionLayer);
     urbanMarker.bindTooltip(
-      `도시대기 [${region.urban.stationName}] · 일반 날씨앱 예보: ${region.urban.weather_grade}`,
+      `동네 공기 [${region.urban.stationName}] · 날씨앱 예보: ${region.urban.weather_grade}`,
       { direction: "top", offset: [0, -10] }
     );
     urbanMarker.bindPopup(
-      `<strong>도시대기 측정소: ${region.urban.stationName}</strong><br/>` +
-        `일반 날씨앱 예보: <b>${region.urban.weather_grade}</b> (PM10 ${region.urban.pm10_mean} ㎍/㎥)<br/>` +
-        `NO₂ 평균: ${region.urban.no2_mean} ppm · CO: ${region.urban.co_mean} ppm<br/>` +
-        `복합 가스 위험지수: <b>${region.urban.risk_mean}점</b>`
+      `<strong>동네 기준 (${region.urban.stationName})</strong><br/>` +
+        `일반 날씨앱 예보: <b style="color:#047857;">${region.urban.weather_grade}</b> (주거지 공기는 맑아요)<br/>` +
+        `<span style="color:#64748B;font-size:11px;">참고 측정: 미세먼지 ${region.urban.pm10_mean}㎍/㎥ · 가스지수 ${region.urban.risk_mean}점</span>`
     );
 
-    // 3. 도로변 대기측정소 (펄스)
+    // 3. 큰길 매연 집중지 (도로변 측정소)
     const roadIcon = L.divIcon({
       className: "",
       html: `<div class="pulse-marker-wrap"><div class="pulse-ring"></div><div class="pulse-core"></div></div>`,
@@ -916,15 +944,14 @@
     });
     const roadMarker = L.marker(region.road.coords, { icon: roadIcon, zIndexOffset: 500 }).addTo(state.regionLayer);
     roadMarker.bindTooltip(
-      `도로변 [${region.road.displayName}] · NO₂ +${region.road.gap_no2_pct}% 폭증 (마스크 투과 위험)`,
+      `큰길 매연 [${region.road.stationName}] · 동네보다 ${gapRatio}배 독함 (마스크 통과)`,
       { direction: "top", offset: [0, -14] }
     );
     roadMarker.bindPopup(
-      `<strong>도로변 대기측정소: ${region.road.displayName}</strong><br/>` +
-        `<span style="color:#B91C1C; font-weight:700;">실제 도로변 가스: ${region.road.road_grade}</span><br/>` +
-        `NO₂ 평균: <b>${region.road.no2_mean} ppm</b> (도시대기 대비 <b>+${region.road.gap_no2_pct}%</b>)<br/>` +
-        `피크타임 NO₂: <b>${region.road.no2_peak} ppm</b> (+${region.road.gap_no2_peak_pct}%)<br/>` +
-        `※ KF94 마스크 가스 방어율 0% (100% 투과)`
+      `<strong>큰길 매연 집중지: ${region.road.stationName}</strong><br/>` +
+        `<span style="color:#B91C1C; font-weight:700;">동네보다 ${gapRatio}배(+${Math.round(region.road.gap_no2_pct)}%) 더 독해요 · ${region.road.road_grade}</span><br/>` +
+        `바쁜 시간대 최대 <b>${peakRatio}배</b> · KF94 마스크 차단 0%<br/>` +
+        `<span style="color:#64748B;font-size:11px;">참고 측정: NO₂ ${region.road.no2_mean}ppm · 피크 위험 ${region.road.risk_peak}점</span>`
     );
 
     // 4. 지자체 이동노동자 쉼터
@@ -936,25 +963,25 @@
         iconAnchor: [14, 14],
       });
       const sm = L.marker(sh.coords, { icon: shIcon, zIndexOffset: 400 }).addTo(state.regionLayer);
-      sm.bindTooltip(`이동노동자 쉼터: ${sh.name}${idx === 0 ? " (경유 시 -18점 환기)" : ""}`, {
+      sm.bindTooltip(`라이더 쉼터: ${sh.name}${idx === 0 ? " (-18점 바로 회복)" : ""}`, {
         direction: "top",
         offset: [0, -12],
       });
       sm.bindPopup(
         `<strong>${sh.name}</strong><br/>` +
           `위치: ${sh.address}<br/>` +
-          `운영: ${sh.hours}`
+          `이용: ${sh.hours}`
       );
     });
 
-    // 5. 대로변 위험 루트 및 구간 노드
+    // 5. 매연 많은 큰길 배달 루트
     L.polyline(region.danger_route, {
       color: "#DC2626",
       weight: isEscaping ? 3 : 4.5,
       opacity: isEscaping ? 0.32 : 0.85,
       dashArray: "10 8",
     })
-      .bindTooltip("고농도 매연 노출 대로변 상권 루트", { sticky: true })
+      .bindTooltip("매연이 많이 쌓이는 큰길 배달 노선", { sticky: true })
       .addTo(state.regionLayer);
 
     region.danger_route.forEach((pt, i) => {
@@ -966,11 +993,11 @@
         fillOpacity: isEscaping ? 0.4 : 0.9,
         weight: 1.5,
       })
-        .bindTooltip(`대로변 거점: ${wpName}`, { direction: "top" })
+        .bindTooltip(`큰길 거점: ${wpName}`, { direction: "top" })
         .addTo(state.regionLayer);
     });
 
-    // 6. 외곽 청정 순환 배차 루트
+    // 6. 지연 0분 맑은 동네 순환 길
     const activeEsc = state.escapePath.length >= 2 ? state.escapePath : region.escape_route;
     L.polyline(activeEsc, {
       color: "#059669",
@@ -978,7 +1005,7 @@
       opacity: isEscaping ? 0.92 : 0.36,
       dashArray: isEscaping ? null : "4 6",
     })
-      .bindTooltip("지연 0분! 외곽 청정 주거권역 우선 순환 배차 루트", { sticky: true })
+      .bindTooltip("배달 지연 0분! 공기 맑은 동네 순환길", { sticky: true })
       .addTo(state.regionLayer);
 
     if (isEscaping && region.shelters[0]) {
@@ -992,7 +1019,7 @@
     }
 
     region.escape_route.forEach((pt, i) => {
-      const wpName = (region.escape_waypoints && region.escape_waypoints[i]) || `청정 거점 ${i + 1}`;
+      const wpName = (region.escape_waypoints && region.escape_waypoints[i]) || `맑은 동네 ${i + 1}`;
       L.circleMarker(pt, {
         radius: isEscaping ? 4.5 : 3.5,
         color: "#FFFFFF",
@@ -1000,7 +1027,7 @@
         fillOpacity: isEscaping ? 0.92 : 0.5,
         weight: 1.5,
       })
-        .bindTooltip(`청정 경로: ${wpName}`, { direction: "top" })
+        .bindTooltip(`맑은 길: ${wpName}`, { direction: "top" })
         .addTo(state.regionLayer);
     });
   }
@@ -1043,7 +1070,7 @@
       }).addTo(state.riderLayer);
 
       state.riderMarker.bindPopup(
-        "<strong>라이더 김성원 (드래그 가능)</strong><br/>지도의 붉은 가스 포켓 안팎으로 끌어당겨 피폭·환기 변화를 즉시 테스트할 수 있습니다."
+        "<strong>라이더 김성원 (직접 끌기 가능)</strong><br/>빨간 매연 구간 안팎으로 옮겨 보시면 내 몸 피로도 변화를 바로 확인할 수 있어요."
       );
 
       state.riderMarker.on("drag", (ev) => {
@@ -1054,7 +1081,7 @@
         }
         state.manualPositionHold = true;
         state.customTarget = null;
-        state.currentSegmentLabel = "수동 드래그 위치 관측 중";
+        state.currentSegmentLabel = "직접 옮긴 위치 확인 중";
         updateAllSimulatorVisuals(false);
       });
 
@@ -1247,32 +1274,32 @@
     if (state.routePhase === "idle") {
       badgeEl.textContent = "대기 (0분)";
     } else if (state.routePhase === "danger") {
-      badgeEl.textContent = `대로변 주행 (${minInt}분)`;
+      badgeEl.textContent = `큰길 주행 (${minInt}분)`;
     } else if (state.routePhase === "escaping") {
-      badgeEl.textContent = `청정 탈출 중 (${minInt}분)`;
+      badgeEl.textContent = `맑은 콜 이동 (${minInt}분)`;
     } else {
       badgeEl.textContent = `회복 완료 (${minInt}분)`;
     }
 
-    // 대화형 Toss 스타일 상태 헤드라인
+    // 대화형 라이더 상태 헤드라인
     const headlineEl = document.getElementById("simStatusHeadline");
     if (headlineEl) {
       if (state.routePhase === "idle") {
-        headlineEl.textContent = "출발 대기 중이에요. 주행을 시작하면 포켓 구간에서 수치가 올라요.";
+        headlineEl.textContent = "출발 전이에요. 주행을 시작하면 빨간 매연 구간에서 피로도가 올라요.";
       } else if (state.routePhase === "recovered") {
-        headlineEl.textContent = "청정 주거권역에 도착했어요. 호흡기 게이지가 안전 수준으로 회복됐어요.";
+        headlineEl.textContent = "맑은 동네 콜에 도착했어요! 쌓였던 매연 피로도가 안전 수준으로 내려갔어요.";
       } else if (state.routePhase === "escaping") {
         headlineEl.textContent = state.shelterVisited
-          ? "이동노동자 쉼터 환기를 마치고 청정 권역으로 순환 주행하고 있어요."
-          : "배달 지연 0분으로 공기 맑은 외곽 청정 콜로 순환 중이에요.";
+          ? "라이더 쉼터에서 잠깐 숨 돌리고 맑은 동네로 안전하게 이동하고 있어요."
+          : "배달 지연 0분으로 공기 맑은 동네 콜을 받아 빠져나가는 중이에요.";
       } else if (evalRes.distPocket <= pocketR * 0.55) {
-        headlineEl.textContent = "가스 포켓 중심을 지나고 있어요. 마스크를 통과하는 가스가 빠르게 쌓여요.";
+        headlineEl.textContent = "매연이 가장 독한 한가운데를 지나고 있어요! 마스크가 막지 못해 빠르게 쌓여요.";
       } else if (evalRes.distPocket <= pocketR) {
-        headlineEl.textContent = "도로변 가스 포켓 안에 들어왔어요. 누적 흡입량이 계속 올라갑니다.";
+        headlineEl.textContent = "큰길 매연 구간 안에 들어왔어요. 피로도가 계속 올라가고 있습니다.";
       } else if (evalRes.rate > 0.05) {
-        headlineEl.textContent = "대로변 상권을 주행하고 있어요. 아직 포켓 바깥이라 완만히 올라요.";
+        headlineEl.textContent = "큰길 초입을 달리고 있어요. 아직 중심부는 아니라 천천히 올라요.";
       } else {
-        headlineEl.textContent = "포켓을 벗어나 환기되는 구간이에요. 누적 게이지가 서서히 내려갑니다.";
+        headlineEl.textContent = "매연 구간을 벗어나 공기가 맑은 곳이에요. 피로도가 서서히 내려갑니다.";
       }
     }
 
@@ -1282,13 +1309,13 @@
     if (state.routePhase === "idle") {
       phasePill.textContent = "대기 중";
     } else if (state.routePhase === "danger") {
-      phasePill.textContent = "대로변 피폭 관제";
+      phasePill.textContent = "매연 구간 주행";
       phasePill.classList.add("tag-danger");
     } else if (state.routePhase === "escaping") {
-      phasePill.textContent = "청정 순환 탈출";
+      phasePill.textContent = "맑은 콜 전환";
       phasePill.classList.add("tag-escape");
     } else {
-      phasePill.textContent = "청정 안착 완료";
+      phasePill.textContent = "회복 완료";
     }
     document.getElementById("esgScoreBadge").textContent =
       `누적 ${state.esgPoints.toLocaleString()}P · 탈출 ${state.escapeCount}회`;
@@ -1296,23 +1323,26 @@
     document.getElementById("simSegmentName").textContent =
       state.currentSegmentLabel || `${region.danger_waypoints[0]} (출발 대기)`;
 
-    // 포켓 거리 & 변화율 바
+    // 매연 거리 & 변화 속도
     const distEl = document.getElementById("simPocketDist");
     distEl.textContent = evalRes.pocketBadge;
     distEl.className = `sp-val mono-num ${evalRes.zoneClass}`;
 
     const deltaEl = document.getElementById("simDeltaRate");
     if (state.routePhase === "idle") {
-      deltaEl.textContent = "0.0점/분 (대기 중)";
+      deltaEl.textContent = "대기 중 (0점/분)";
       deltaEl.className = "sp-val mono-num text-slate";
     } else if (state.routePhase === "recovered") {
-      deltaEl.textContent = "0.0점/분 (회복 완료)";
+      deltaEl.textContent = "회복 끝! (안전)";
       deltaEl.className = "sp-val mono-num text-emerald";
+    } else if (evalRes.rate > 2.2) {
+      deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 빠르게 쌓임`;
+      deltaEl.className = "sp-val mono-num text-rose";
     } else if (evalRes.rate > 0.05) {
-      deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 피폭 누적`;
-      deltaEl.className = `sp-val mono-num ${evalRes.rate > 2.2 ? "text-rose" : "text-amber"}`;
+      deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 조금씩 쌓임`;
+      deltaEl.className = "sp-val mono-num text-amber";
     } else {
-      deltaEl.textContent = `${evalRes.rate.toFixed(1)}점/분 ▼ 호흡기 환기`;
+      deltaEl.textContent = `${evalRes.rate.toFixed(1)}점/분 ▼ 시원하게 빠짐`;
       deltaEl.className = "sp-val mono-num text-emerald";
     }
 
@@ -1322,33 +1352,69 @@
     scoreEl.style.color = scoreInt >= 80 ? "#DC2626" : scoreInt >= 50 ? "#B45309" : "#047857";
     document.getElementById("gaugeFill").style.width = `${clamp(state.simScore, 0, 100)}%`;
 
-    // 텔레메트리 (국소 NO2, CO-Hb, 뇌 산소/졸음 경보)
-    document.getElementById("teleNo2").textContent = `${evalRes.localNo2.toFixed(4)} ppm`;
-    const cohb = (0.7 + (state.simScore / 100) * 4.9).toFixed(1);
-    document.getElementById("teleCohb").textContent = `${cohb} %`;
+    // 라이더 직관 컨디션 텔레메트리 (어려운 기호 없이 쉬운 말로, 원수치는 툴팁에 보관)
+    const no2El = document.getElementById("teleNo2");
+    const ratio = evalRes.ratioVsUrban || 1.0;
+    no2El.title = `실측 이산화질소(NO₂) 농도: ${evalRes.localNo2.toFixed(4)} ppm`;
+    if (state.routePhase === "recovered" || (state.routePhase === "escaping" && ratio < 1.15)) {
+      no2El.textContent = "상쾌·맑음 (환기)";
+      no2El.className = "tele-val text-emerald";
+    } else if (ratio >= 2.0) {
+      no2El.textContent = `매우 독함 (${ratio.toFixed(1)}배)`;
+      no2El.className = "tele-val text-rose";
+    } else if (ratio >= 1.4) {
+      no2El.textContent = `매캐함 (${ratio.toFixed(1)}배)`;
+      no2El.className = "tele-val text-amber";
+    } else if (ratio >= 1.15) {
+      no2El.textContent = `조금 탁함 (${ratio.toFixed(1)}배)`;
+      no2El.className = "tele-val text-sky";
+    } else {
+      no2El.textContent = `동네 수준 (${ratio.toFixed(1)}배)`;
+      no2El.className = "tele-val text-emerald";
+    }
+
+    const cohbVal = (0.7 + (state.simScore / 100) * 4.9).toFixed(1);
+    const cohbEl = document.getElementById("teleCohb");
+    cohbEl.title = `혈중 일산화탄소 헤모글로빈(CO-Hb) 추정: ${cohbVal}%`;
+    if (state.routePhase === "recovered") {
+      cohbEl.textContent = "전혀 없음";
+      cohbEl.className = "tele-val text-emerald";
+    } else if (scoreInt >= 80) {
+      cohbEl.textContent = "졸음·사고 위험!";
+      cohbEl.className = "tele-val text-rose";
+    } else if (scoreInt >= 55) {
+      cohbEl.textContent = "두통 시작 주의";
+      cohbEl.className = "tele-val text-amber";
+    } else if (scoreInt >= 25) {
+      cohbEl.textContent = "약간 나른함";
+      cohbEl.className = "tele-val text-sky";
+    } else {
+      cohbEl.textContent = "전혀 없음";
+      cohbEl.className = "tele-val text-emerald";
+    }
 
     const alertEl = document.getElementById("teleAlertLevel");
     if (state.routePhase === "recovered" || (state.routePhase === "escaping" && scoreInt < 40)) {
-      alertEl.textContent = "정상 회복 (환기 양호)";
+      alertEl.textContent = "완전 회복";
       alertEl.className = "tele-val text-emerald";
     } else if (state.routePhase === "escaping") {
-      alertEl.textContent = "환기 회복 중 (이탈)";
+      alertEl.textContent = "숨 쉬기 편해짐";
       alertEl.className = "tele-val text-sky";
     } else if (scoreInt >= 80) {
-      alertEl.textContent = "위험 (졸음·추돌 고위험)";
+      alertEl.textContent = "순환 배차 필요!";
       alertEl.className = "tele-val text-rose";
     } else if (scoreInt >= 55) {
-      alertEl.textContent = "경고 (두통·피로 누적)";
+      alertEl.textContent = "매연 피로 누적";
       alertEl.className = "tele-val text-amber";
     } else if (scoreInt >= 25) {
-      alertEl.textContent = "주의 (초기 기도 자극)";
+      alertEl.textContent = "초기 답답함";
       alertEl.className = "tele-val text-sky";
     } else {
-      alertEl.textContent = "정상 (집중 양호)";
+      alertEl.textContent = "안전 운행";
       alertEl.className = "tele-val text-emerald";
     }
 
-    // 수동 순환배차 버튼 활성화 여부
+    // 바로 전환 버튼 활성화 여부
     const manualBtn = document.getElementById("btnManualEscape");
     if (manualBtn) {
       manualBtn.disabled = state.routePhase === "escaping" || state.routePhase === "recovered";
@@ -1363,28 +1429,28 @@
       const isRec = state.routePhase === "recovered";
       const pill = document.getElementById("dispatchPill");
       pill.textContent = isRec
-        ? "청정 권역 안착 · 환기 완료"
-        : "순환 배차 가동 · 외곽 청정 환기 중";
+        ? "맑은 동네 도착 · 회복 끝!"
+        : "맑은 동네 콜 배차 중";
       pill.classList.toggle("pill-recovered", isRec);
 
       document.getElementById("dispatchHeadline").textContent = isRec
-        ? `청정 권역에 도착해 게이지가 ${state.peakScoreBeforeEscape}점 → ${scoreInt}점으로 회복됐어요 (지연 0분)`
-        : `순환 배차 전환 (${state.peakScoreBeforeEscape}점 → 현재 ${scoreInt}점) · ${call.order_title}`;
+        ? `맑은 동네에 도착해 피로도가 ${state.peakScoreBeforeEscape}점 → ${scoreInt}점으로 내려갔어요 (지연 0분)`
+        : `매연 피하고 맑은 콜 이동 중 (${state.peakScoreBeforeEscape}점 → 현재 ${scoreInt}점) · ${call.order_title}`;
       document.getElementById("dispatchOrderTitle").textContent = call.order_title;
       document.getElementById("dispatchDelay").textContent = call.delay_note;
       document.getElementById("dispatchShelter").textContent = state.shelterVisited
-        ? `${call.shelter_name} · 환기 휴식 -18점 완료`
-        : `${call.shelter_name} · 경유 예정 (-18점 환기)`;
+        ? `${call.shelter_name} · 잠깐 쉬며 -18점 회복 완료`
+        : `${call.shelter_name} · 지나며 -18점 바로 회복 예정`;
       document.getElementById("rewardPointsChip").textContent = isRec
-        ? `그린 포인트 ${call.green_points} 지급 완료`
-        : `도착 시 그린 포인트 ${call.green_points} 지급`;
+        ? `그린 포인트 ${call.green_points} 적립 완료`
+        : `도착 시 그린 포인트 ${call.green_points} 적립`;
 
       document.getElementById("mapOverlayBadge").textContent = isRec
-        ? "청정 권역 환기 회복 완료"
-        : "AI 권역 탈출 순환 배차 가동";
+        ? "맑은 동네 회복 완료"
+        : "맑은 동네 콜 자동 전환";
       document.getElementById("mapOverlayTitle").textContent = isRec
         ? `[${region.name}] ${state.peakScoreBeforeEscape}점 → ${scoreInt}점 회복 완료 (+500P)`
-        : `[${region.name}] 외곽 청정 순환 배차 주행 중 (현재 ${scoreInt}점 ▼)`;
+        : `[${region.name}] 공기 맑은 동네 콜로 이동 중 (현재 ${scoreInt}점 ▼)`;
       document.getElementById("mapOverlayDesc").textContent =
         `배달 지연 ${call.delay_minutes}분 · ${call.shelter_name}`;
 
@@ -1414,41 +1480,55 @@
       btn.classList.toggle("active", btn.dataset.region === state.activeRegionKey);
     });
 
+    const ratio = (1 + (region.road.gap_no2_pct || 0) / 100).toFixed(1);
+    const peakRatio = (1 + (region.road.gap_no2_peak_pct || 0) / 100).toFixed(1);
+    const gapPctInt = Math.round(region.road.gap_no2_pct || 0);
+
+    const heroBadge = document.getElementById("heroZoneBadge");
+    if (heroBadge) heroBadge.textContent = region.name;
+
     const heroH1 = document.getElementById("heroRegionHeadline");
     const heroSub = document.getElementById("heroRegionSub");
     if (heroH1) {
       heroH1.textContent = "";
-      heroH1.appendChild(document.createTextNode(`${region.name}, 도로변 이산화질소가 도시보다 `));
+      heroH1.appendChild(
+        document.createTextNode(`날씨앱엔 '${region.urban.weather_grade}'인데, ${region.road.stationName} 큰길 매연은 `)
+      );
       const span = document.createElement("span");
       span.className = "hero-highlight mono-num";
-      span.textContent = `+${region.road.gap_no2_pct}%`;
+      span.textContent = `${ratio}배(+${gapPctInt}%)`;
       heroH1.appendChild(span);
-      heroH1.appendChild(document.createTextNode(" 높아요"));
+      heroH1.appendChild(document.createTextNode(" 더 독해요"));
     }
     if (heroSub) {
-      heroSub.textContent = `${region.urban.stationName}(도시대기) 날씨앱은 '${region.urban.weather_grade}'이지만, ${region.road.displayName} 주행 구간엔 히든 가스 포켓이 형성돼 환기 전환이 필요합니다.`;
+      heroSub.textContent =
+        "KF94 마스크는 미세먼지만 막고 배기가스는 못 막아요. 피로도가 80점 넘기 전에 맑은 동네 콜로 바꿔드릴게요.";
     }
 
     document.getElementById("kpiUrbanName").textContent = region.urban.stationName;
-    document.getElementById("kpiUrbanPm10").textContent = `${region.urban.pm10_mean} ㎍/㎥`;
-    document.getElementById("kpiUrbanGrade").textContent = region.urban.weather_grade;
-    document.getElementById("kpiUrbanSub").textContent =
-      `NO₂ ${region.urban.no2_mean} ppm · 가스 위험지수 ${region.urban.risk_mean}점`;
+    const urbanMainEl = document.getElementById("kpiUrbanPm10");
+    urbanMainEl.textContent = region.urban.weather_grade;
+    urbanMainEl.title = `참고 실측: 미세먼지 ${region.urban.pm10_mean} ㎍/㎥ · 가스지수 ${region.urban.risk_mean}점`;
+    document.getElementById("kpiUrbanGrade").textContent =
+      region.urban.pm10_mean <= 30 ? "안전" : "보통";
+    document.getElementById("kpiUrbanSub").textContent = "일반 날씨앱 예보 기준";
 
-    document.getElementById("kpiRoadName").textContent = region.road.displayName;
-    document.getElementById("kpiRoadNo2").textContent = `${region.road.no2_mean} ppm`;
-    document.getElementById("kpiGapBadge").textContent = `NO₂ +${region.road.gap_no2_pct}%`;
-    document.getElementById("kpiRoadSub").textContent =
-      `마스크 방어율 0% · 피크 ${region.road.no2_peak} ppm (+${region.road.gap_no2_peak_pct}%)`;
+    document.getElementById("kpiRoadName").textContent = region.road.stationName;
+    const roadMainEl = document.getElementById("kpiRoadNo2");
+    roadMainEl.textContent = `${ratio}배 독함`;
+    roadMainEl.title = `참고 실측: NO₂ 평균 ${region.road.no2_mean} ppm · 피크 ${region.road.no2_peak} ppm`;
+    document.getElementById("kpiGapBadge").textContent = `+${gapPctInt}%`;
+    document.getElementById("kpiRoadSub").textContent = `마스크 차단 0% · 피크 ${peakRatio}배`;
 
-    document.getElementById("kpiRiskPeak").textContent = `${region.road.risk_peak} 점`;
+    const riskPeakEl = document.getElementById("kpiRiskPeak");
+    riskPeakEl.textContent = `${Math.round(region.road.risk_peak)}점`;
+    riskPeakEl.title = `24시간 평균 위험지수 ${region.road.risk_mean}점 (동네 대비 +${region.road.gap_risk_pct}%)`;
     document.getElementById("kpiRiskGrade").textContent = region.road.road_grade;
-    document.getElementById("kpiRiskSub").textContent =
-      `24h 평균 ${region.road.risk_mean}점 (도시대기 대비 +${region.road.gap_risk_pct}%)`;
+    document.getElementById("kpiRiskSub").textContent = "80점 넘으면 맑은 콜 자동 배정";
 
     document.getElementById("mapSubtitle").textContent =
-      `${region.name} · ${region.urban.stationName}(도시대기) vs ${region.road.displayName} 측정망 비교`;
-    document.getElementById("simZoneName").textContent = region.road.displayName;
+      `${region.name} · 동네(${region.urban.stationName})는 맑지만 ${region.road.stationName} 큰길은 매연이 ${ratio}배 높아요`;
+    document.getElementById("simZoneName").textContent = region.road.stationName;
 
     populateHourSelect(region);
 
@@ -1487,8 +1567,8 @@
     const isFallback = meta.mode === "fallback";
     badge.className = `status-badge ${isFallback ? "status-fallback" : "status-live"}`;
     badge.textContent = isFallback
-      ? `로컬 백업 Fallback (${meta.total_rows || 0}행)`
-      : `에어코리아 v1.3 연동 (${meta.total_rows || 0}행)`;
+      ? "백업 데이터 시연 중"
+      : "에어코리아 실시간 연동";
 
     document.getElementById("kpiRowsCount").textContent = `${meta.total_rows || 0} 행`;
     document.getElementById("kpiImputeBadge").textContent = `결측 ${meta.imputed_cell_count || 0}건 정제`;
@@ -1624,7 +1704,7 @@
         const hd = getHourData(region, state.simHour);
         addEventLog(
           state.simMinutes,
-          `운행 시간대 변경 → ${hd.label} (도로변 위험지수 ${hd.road_risk}점 반영)`,
+          `운행 시간 변경 → ${hd.label} (큰길 위험 ${Math.round(hd.road_risk)}점 반영)`,
           ""
         );
         updateAllSimulatorVisuals(false);
@@ -1692,7 +1772,7 @@
 
     document.getElementById("btnToggleAllStations").addEventListener("click", (e) => {
       state.showAllStations = !state.showAllStations;
-      e.target.textContent = state.showAllStations ? "서울 전체 숨기기" : "서울 전체 측정소";
+      e.target.textContent = state.showAllStations ? "서울 전체 숨기기" : "서울 전체 보기";
       renderAllStationsLayer();
     });
 

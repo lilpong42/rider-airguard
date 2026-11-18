@@ -105,8 +105,8 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
         "danger_waypoints": [
             "신사역 사거리",
             "논현역",
-            "신논현역 (가스포켓 진입)",
-            "강남역 사거리 (포켓 중심)",
+            "신논현역 (매연 진입)",
+            "강남역 사거리 (매연 한가운데)",
             "우성아파트 사거리",
             "양재역 회차지",
         ],
@@ -171,7 +171,7 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
         "danger_waypoints": [
             "합정역 사거리",
             "홍대입구역 상권",
-            "신촌로 (가스포켓 중심)",
+            "신촌로 (매연 한가운데)",
             "이대역 대로변",
             "아현역 회차지",
         ],
@@ -236,7 +236,7 @@ REGION_CONFIGS: dict[str, dict[str, Any]] = {
         ],
         "danger_waypoints": [
             "동대문역 교차로",
-            "청계천로·신설동 (포켓 중심)",
+            "청계천로·신설동 (매연 한가운데)",
             "용두·동대문구청",
             "제기동역 대로변",
             "청량리역 환승축",
@@ -294,12 +294,12 @@ def _grade_pm10(pm10: float) -> str:
 
 def _grade_gas(risk: float) -> str:
     if risk < 55:
-        return "양호"
+        return "안전"
     if risk < 75:
         return "주의"
     if risk < 95:
-        return "나쁨 (마스크 투과 위험)"
-    return "매우 나쁨 (즉시 순환 필요)"
+        return "나쁨"
+    return "매우 위험"
 
 
 def build_dashboard_payload() -> dict[str, Any]:
@@ -310,7 +310,7 @@ def build_dashboard_payload() -> dict[str, Any]:
 
     meta = json.loads(META_PATH.read_text(encoding="utf-8")) if META_PATH.exists() else {}
 
-    # 권역별 실측 요약 및 AI 산재·보험 손해율 브리핑 생성
+    # 권역별 실측 요약 및 라이더·관제 브리핑 생성
     regions_out: dict[str, Any] = {}
     for key, cfg in REGION_CONFIGS.items():
         u_name = cfg["urban_station"]
@@ -347,6 +347,8 @@ def build_dashboard_payload() -> dict[str, Any]:
         gap_no2_peak_pct = round(((r_no2_peak - u_no2_peak) / u_no2_peak) * 100.0, 1) if u_no2_peak else 0.0
         gap_co_pct = round(((r_co_mean - u_co_mean) / u_co_mean) * 100.0, 1) if u_co_mean else 0.0
         gap_risk_pct = round(((r_risk_mean - u_risk_mean) / u_risk_mean) * 100.0, 1) if u_risk_mean else 0.0
+        gap_ratio = round(1.0 + (gap_no2_pct / 100.0), 1)
+        gap_peak_ratio = round(1.0 + (gap_no2_peak_pct / 100.0), 1)
 
         # 동대문권은 인근 홍릉로 데이터도 참고 표시
         extra_note = ""
@@ -354,23 +356,23 @@ def build_dashboard_payload() -> dict[str, Any]:
             dh = df[df["stationName"] == "홍릉로"]
             hl_no2 = float(dh["no2Value"].mean())
             hl_gap = round(((hl_no2 - u_no2_mean) / u_no2_mean) * 100.0, 1)
-            extra_note = f" (인근 외대·청량리 홍릉로 측정소 기준 NO₂ +{hl_gap}%)"
+            hl_ratio = round(1.0 + (hl_gap / 100.0), 1)
+            extra_note = f" (외대·청량리 홍릉로 기준 {hl_ratio}배)"
 
-        # 권역별 3줄 AI 산재·보험 손해율 분석 브리핑
+        # 권역별 3줄 브리핑 (라이더 직관 설명 + 공모전 산재/보험 ROI 근거)
         est_annual_saving_m = round(14.2 + (gap_no2_pct * 0.14), 1)
         ai_briefing = [
             (
-                f"① 측정망 사각지대 분석: {cfg['name']}은 일반 날씨앱({u_name} 도시대기) 기준 "
-                f"미세먼지 PM10 {u_pm10_mean:.1f}㎍/㎥({_grade_pm10(u_pm10_mean)})로 평온해 보이나, "
-                f"실제 라이더 주행축({r_name})의 마스크 투과 NO₂는 24시간 평균 +{gap_no2_pct}% (피크 +{gap_no2_peak_pct}%{extra_note}), CO는 +{gap_co_pct}% 폭증합니다."
+                f"① 왜 날씨앱과 다를까: {cfg['name']} 동네({u_name})는 날씨앱 기준 '{_grade_pm10(u_pm10_mean)}'이지만, "
+                f"실제 배달하는 {r_name} 큰길은 배기가스가 평균 {gap_ratio}배(+{gap_no2_pct}% · 피크 {gap_peak_ratio}배{extra_note}) 더 독해요."
             ),
             (
-                f"② 산재보험·졸음사고 손해율 경고: 피크타임 도로변 가스 위험지수가 최고 {r_risk_peak:.1f}점에 도달해 "
-                f"CO-헤모글로빈 결합에 따른 뇌 산소 저하·졸음 추돌 위험이 급증하며, 순환 배차 미적용 시 플랫폼·보험사 손해율이 상승합니다."
+                f"② 왜 순환 배차가 필요할까: 바쁜 시간대 큰길 위험도가 {r_risk_peak:.0f}점까지 치솟아 "
+                f"KF94 마스크를 써도 두통과 졸음이 몰려와 추돌 사고 위험이 커집니다."
             ),
             (
-                f"③ B2B/B2G 도입 ROI: 임계치(80점) 도달 라이더를 외곽 청정 권역(지연 0분) 및 이동노동자 쉼터로 자동 분산 시 "
-                f"호흡기·추돌 산재 클레임 연간 약 {est_annual_saving_m}억 원 절감(권역 1,000명 기준) 및 시간제 보험료 4.5% 할인이 즉시 연동됩니다."
+                f"③ 라이더 혜택 & 산재 절감: 80점 넘기 전에 맑은 동네 콜·쉼터로 전환하면 +500P와 시간제 보험료 4.5% 할인이 적용되고, "
+                f"플랫폼·보험사 산재 비용도 연 약 {est_annual_saving_m}억 원 절감됩니다."
             ),
         ]
 
