@@ -37,7 +37,7 @@
     dangerTrailPoints: [],
     escapeTrailPoints: [],
     audioEnabled: true,
-    tileMode: "dark", // "dark" | "osm"
+    tileMode: "light", // "light" | "dark"
     showAllStations: false,
     map: null,
     tileLayer: null,
@@ -372,7 +372,7 @@
         distPocket,
         rate: 3.35 * trafficFactor,
         localNo2: hd.road_no2 * 1.15,
-        zoneText: "🔴 가스 포켓 중심 관통 (피폭 급증)",
+        zoneText: "가스 포켓 중심 관통 (피폭 급증)",
         zoneClass: "text-rose",
         pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 코어`,
       };
@@ -382,7 +382,7 @@
         distPocket,
         rate: 2.05 * trafficFactor,
         localNo2,
-        zoneText: "🟠 히든 가스 포켓 진입 (피폭 상승)",
+        zoneText: "히든 가스 포켓 진입 (피폭 상승)",
         zoneClass: "text-amber",
         pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 내부`,
       };
@@ -392,7 +392,7 @@
         distPocket,
         rate: 0.55 * trafficFactor,
         localNo2: hd.urban_no2 + (hd.road_no2 - hd.urban_no2) * 0.35,
-        zoneText: "🟡 대로변 외곽 진입 (완만 누적)",
+        zoneText: "대로변 외곽 진입 (완만 누적)",
         zoneClass: "text-sky",
         pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 포켓 외곽`,
       };
@@ -402,7 +402,7 @@
       distPocket,
       rate: -1.75 * cleanFactor,
       localNo2: hd.urban_no2 * 0.92,
-      zoneText: "🟢 청정 주거권역 (자연 환기)",
+      zoneText: "청정 주거권역 (자연 환기)",
       zoneClass: "text-emerald",
       pocketBadge: `${Math.round(distPocket).toLocaleString()}m · 청정 외곽`,
     };
@@ -476,19 +476,20 @@
     }
     state.escapeSegIdx = 0;
     state.escapeT = 0;
+    state.escapeTrailPoints = [startPt];
 
     if (!isManual) {
       playEmergencyChime();
       addEventLog(
         state.simMinutes,
-        `🚨 임계치 80점 돌파 (${Math.round(state.simScore)}점)! 지연 0분 외곽 순환 배차 자동 발동`,
+        `임계치 80점 돌파 (${Math.round(state.simScore)}점) — 지연 0분 외곽 순환 배차 자동 발동`,
         "ev-danger"
       );
     } else {
       playRecoveryChime();
       addEventLog(
         state.simMinutes,
-        `🌿 수동 순환 배차 전환 (${Math.round(state.simScore)}점) — ${region.escape_call.shelter_name} 경유 시작`,
+        `수동 순환 배차 전환 (${Math.round(state.simScore)}점) — ${region.escape_call.shelter_name} 경유 시작`,
         "ev-escape"
       );
     }
@@ -610,11 +611,13 @@
         }
       }
 
-      // 이동 궤적 기록
-      const lastTr = state.traveledPoints[state.traveledPoints.length - 1];
+      // 이동 궤적 기록 (위험 구간 vs 순환 탈출 구간 분리 기록)
+      const isEscTrail = state.routePhase === "escaping" || state.routePhase === "recovered";
+      const trailArr = isEscTrail ? state.escapeTrailPoints : state.dangerTrailPoints;
+      const lastTr = trailArr[trailArr.length - 1];
       if (!lastTr || haversineMeters(lastTr, state.riderLatLng) > 35) {
-        state.traveledPoints.push([state.riderLatLng[0], state.riderLatLng[1]]);
-        if (state.traveledPoints.length > 220) state.traveledPoints.shift();
+        trailArr.push([state.riderLatLng[0], state.riderLatLng[1]]);
+        if (trailArr.length > 220) trailArr.shift();
       }
 
       // 2. 공간 가스 노출 / 환기 계산
@@ -630,7 +633,7 @@
         state.enteredPocketLogged = true;
         addEventLog(
           state.simMinutes,
-          `🔴 ${region.road.displayName} 가스 포켓(${pocketR}m) 진입 — 마스크 투과 피폭 가속`,
+          `${region.road.displayName} 가스 포켓(${pocketR}m) 진입 — 마스크 투과 피폭 가속`,
           "ev-danger"
         );
       }
@@ -718,7 +721,8 @@
       const startPt = region.danger_route[0];
       state.riderLatLng = [startPt[0], startPt[1]];
       state.currentSegmentLabel = `${region.danger_waypoints[0]} (출발 대기)`;
-      state.traveledPoints = [[startPt[0], startPt[1]]];
+      state.dangerTrailPoints = [[startPt[0], startPt[1]]];
+      state.escapeTrailPoints = [];
     }
 
     if (fullReset) {
@@ -768,13 +772,13 @@
       [37.548, 127.115],
     ];
     L.polyline(hanRiver, {
-      color: "#1d4ed8",
+      color: "#0284C7",
       weight: 18,
-      opacity: 0.16,
+      opacity: 0.14,
       interactive: false,
     }).addTo(state.map);
 
-    setTileLayer("dark");
+    setTileLayer("light");
     state.regionLayer = L.layerGroup().addTo(state.map);
     state.riderLayer = L.layerGroup().addTo(state.map);
     state.allStationsLayer = L.layerGroup();
@@ -793,15 +797,15 @@
       }
       state.targetMarker = L.circleMarker(state.customTarget, {
         radius: 7,
-        color: "#38bdf8",
-        fillColor: "#0ea5e9",
-        fillOpacity: 0.5,
+        color: "#0B0F17",
+        fillColor: "#0284C7",
+        fillOpacity: 0.75,
         weight: 2,
       })
         .bindTooltip("지정 목적지")
         .addTo(state.riderLayer);
 
-      addEventLog(state.simMinutes, "📍 지도 클릭 목적지 설정 — 실시간 이동 중", "ev-shelter");
+      addEventLog(state.simMinutes, "지도 클릭 목적지 설정 — 실시간 이동 중", "ev-shelter");
       if (!state.simRunning) {
         startContinuousLoop();
       }
@@ -823,10 +827,11 @@
     const mapEl = document.getElementById("dispatchMap");
     if (mapEl) {
       mapEl.classList.toggle("map-dark-tiles", mode === "dark");
+      mapEl.classList.toggle("map-light-tiles", mode !== "dark");
     }
     const btn = document.getElementById("btnTileToggle");
     if (btn) {
-      btn.textContent = mode === "dark" ? "지도 테마: 다크" : "지도 테마: OSM 기본";
+      btn.textContent = mode === "dark" ? "지도 테마: 다크" : "지도 테마: 라이트";
     }
   }
 
@@ -840,9 +845,9 @@
       const isRoad = st.mangName === "도로변대기";
       const marker = L.circleMarker(st.coords, {
         radius: isRoad ? 7 : 5,
-        color: isRoad ? "#f87171" : "#34d399",
-        fillColor: isRoad ? "#ef4444" : "#10b981",
-        fillOpacity: 0.72,
+        color: isRoad ? "#B91C1C" : "#047857",
+        fillColor: isRoad ? "#DC2626" : "#059669",
+        fillOpacity: 0.78,
         weight: 1.5,
       });
       marker.bindPopup(
@@ -866,20 +871,20 @@
     // 1. 도로변 히든 가스 포켓 원 (핵심 + 외곽 2단 시각화)
     state.pocketCircle = L.circle(region.road.coords, {
       radius: pocketR,
-      color: "#ef4444",
-      weight: 1.6,
+      color: "#DC2626",
+      weight: 1.8,
       dashArray: "6 6",
-      fillColor: "#ef4444",
-      fillOpacity: isEscaping ? 0.12 : 0.22,
+      fillColor: "#DC2626",
+      fillOpacity: isEscaping ? 0.10 : 0.18,
     }).addTo(state.regionLayer);
 
     L.circle(region.road.coords, {
       radius: Math.round(pocketR * 0.55),
-      color: "#f87171",
-      weight: 1,
+      color: "#B91C1C",
+      weight: 1.2,
       dashArray: "3 4",
-      fillColor: "#dc2626",
-      fillOpacity: isEscaping ? 0.08 : 0.18,
+      fillColor: "#DC2626",
+      fillOpacity: isEscaping ? 0.06 : 0.14,
       interactive: false,
     }).addTo(state.regionLayer);
 
@@ -896,7 +901,7 @@
       { direction: "top", offset: [0, -10] }
     );
     urbanMarker.bindPopup(
-      `<strong>🟢 도시대기 측정소: ${region.urban.stationName}</strong><br/>` +
+      `<strong>도시대기 측정소: ${region.urban.stationName}</strong><br/>` +
         `일반 날씨앱 예보: <b>${region.urban.weather_grade}</b> (PM10 ${region.urban.pm10_mean} ㎍/㎥)<br/>` +
         `NO₂ 평균: ${region.urban.no2_mean} ppm · CO: ${region.urban.co_mean} ppm<br/>` +
         `복합 가스 위험지수: <b>${region.urban.risk_mean}점</b>`
@@ -915,8 +920,8 @@
       { direction: "top", offset: [0, -14] }
     );
     roadMarker.bindPopup(
-      `<strong>🔴 도로변 대기측정소: ${region.road.displayName}</strong><br/>` +
-        `<span style="color:#fca5a5;">실제 도로변 가스: ${region.road.road_grade}</span><br/>` +
+      `<strong>도로변 대기측정소: ${region.road.displayName}</strong><br/>` +
+        `<span style="color:#B91C1C; font-weight:700;">실제 도로변 가스: ${region.road.road_grade}</span><br/>` +
         `NO₂ 평균: <b>${region.road.no2_mean} ppm</b> (도시대기 대비 <b>+${region.road.gap_no2_pct}%</b>)<br/>` +
         `피크타임 NO₂: <b>${region.road.no2_peak} ppm</b> (+${region.road.gap_no2_peak_pct}%)<br/>` +
         `※ KF94 마스크 가스 방어율 0% (100% 투과)`
@@ -936,7 +941,7 @@
         offset: [0, -12],
       });
       sm.bindPopup(
-        `<strong>🛡️ ${sh.name}</strong><br/>` +
+        `<strong>${sh.name}</strong><br/>` +
           `위치: ${sh.address}<br/>` +
           `운영: ${sh.hours}`
       );
@@ -944,9 +949,9 @@
 
     // 5. 대로변 위험 루트 및 구간 노드
     L.polyline(region.danger_route, {
-      color: "#ef4444",
-      weight: isEscaping ? 3 : 5,
-      opacity: isEscaping ? 0.32 : 0.88,
+      color: "#DC2626",
+      weight: isEscaping ? 3 : 4.5,
+      opacity: isEscaping ? 0.32 : 0.85,
       dashArray: "10 8",
     })
       .bindTooltip("고농도 매연 노출 대로변 상권 루트", { sticky: true })
@@ -955,22 +960,22 @@
     region.danger_route.forEach((pt, i) => {
       const wpName = (region.danger_waypoints && region.danger_waypoints[i]) || `구간 ${i + 1}`;
       L.circleMarker(pt, {
-        radius: 4,
-        color: "#fecaca",
-        fillColor: "#ef4444",
-        fillOpacity: isEscaping ? 0.35 : 0.85,
+        radius: 4.5,
+        color: "#FFFFFF",
+        fillColor: "#DC2626",
+        fillOpacity: isEscaping ? 0.4 : 0.9,
         weight: 1.5,
       })
         .bindTooltip(`대로변 거점: ${wpName}`, { direction: "top" })
         .addTo(state.regionLayer);
     });
 
-    // 6. 외곽 청정 순환 배차 루트 (대기 중엔 은은한 미리보기 점선, 발동 후 선명한 초록 실선)
+    // 6. 외곽 청정 순환 배차 루트
     const activeEsc = state.escapePath.length >= 2 ? state.escapePath : region.escape_route;
     L.polyline(activeEsc, {
-      color: "#10b981",
-      weight: isEscaping ? 6 : 2.5,
-      opacity: isEscaping ? 0.95 : 0.32,
+      color: "#059669",
+      weight: isEscaping ? 5.5 : 2.8,
+      opacity: isEscaping ? 0.92 : 0.36,
       dashArray: isEscaping ? null : "4 6",
     })
       .bindTooltip("지연 0분! 외곽 청정 주거권역 우선 순환 배차 루트", { sticky: true })
@@ -979,10 +984,10 @@
     if (isEscaping && region.shelters[0]) {
       L.circle(region.shelters[0].coords, {
         radius: 170,
-        color: "#38bdf8",
+        color: "#0284C7",
         weight: 2,
-        fillColor: "#38bdf8",
-        fillOpacity: 0.22,
+        fillColor: "#0284C7",
+        fillOpacity: 0.18,
       }).addTo(state.regionLayer);
     }
 
@@ -990,9 +995,9 @@
       const wpName = (region.escape_waypoints && region.escape_waypoints[i]) || `청정 거점 ${i + 1}`;
       L.circleMarker(pt, {
         radius: isEscaping ? 4.5 : 3.5,
-        color: "#a7f3d0",
-        fillColor: "#10b981",
-        fillOpacity: isEscaping ? 0.9 : 0.45,
+        color: "#FFFFFF",
+        fillColor: "#059669",
+        fillOpacity: isEscaping ? 0.92 : 0.5,
         weight: 1.5,
       })
         .bindTooltip(`청정 경로: ${wpName}`, { direction: "top" })
@@ -1000,7 +1005,7 @@
     });
   }
 
-  // 라이더 마커 및 주행 궤적 업데이트 (깜빡임 없이 부드럽게 위치/배지 갱신)
+  // 라이더 마커 및 주행 궤적 업데이트
   function ensureRiderMarker(region) {
     if (!state.riderLayer || !region) return;
     if (!state.riderLatLng) {
@@ -1010,17 +1015,17 @@
 
     if (!state.dangerTrailPoly) {
       state.dangerTrailPoly = L.polyline(state.dangerTrailPoints, {
-        color: "#fbbf24",
-        weight: 3.2,
-        opacity: 0.78,
+        color: "#D97706",
+        weight: 3.5,
+        opacity: 0.85,
       }).addTo(state.riderLayer);
     }
 
     if (!state.escapeTrailPoly) {
       state.escapeTrailPoly = L.polyline(state.escapeTrailPoints, {
-        color: "#38bdf8",
+        color: "#0284C7",
         weight: 4,
-        opacity: 0.9,
+        opacity: 0.92,
       }).addTo(state.riderLayer);
     }
 
@@ -1163,11 +1168,11 @@
     const isEsc = state.routePhase === "escaping" || state.routePhase === "recovered";
     if (pathEl) {
       pathEl.setAttribute("d", toLine(dangerPts));
-      pathEl.setAttribute("stroke", "#f87171");
+      pathEl.setAttribute("stroke", "#DC2626");
     }
     if (areaEl) {
       areaEl.setAttribute("d", toArea(dangerPts));
-      areaEl.setAttribute("fill", "rgba(239, 68, 68, 0.16)");
+      areaEl.setAttribute("fill", "rgba(220, 38, 38, 0.12)");
     }
 
     if (markersEl) {
@@ -1175,13 +1180,13 @@
       if (escapePts.length >= 2) {
         const escArea = document.createElementNS("http://www.w3.org/2000/svg", "path");
         escArea.setAttribute("d", toArea(escapePts));
-        escArea.setAttribute("fill", "rgba(16, 185, 129, 0.18)");
+        escArea.setAttribute("fill", "rgba(5, 150, 105, 0.14)");
         markersEl.appendChild(escArea);
 
         const escPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
         escPath.setAttribute("d", toLine(escapePts));
         escPath.setAttribute("fill", "none");
-        escPath.setAttribute("stroke", "#10b981");
+        escPath.setAttribute("stroke", "#059669");
         escPath.setAttribute("stroke-width", "2.4");
         escPath.setAttribute("stroke-linecap", "round");
         escPath.setAttribute("stroke-linejoin", "round");
@@ -1194,25 +1199,27 @@
           c.setAttribute("cx", p.x.toFixed(1));
           c.setAttribute("cy", p.y.toFixed(1));
           c.setAttribute("r", "4");
-          c.setAttribute("fill", "#ef4444");
-          c.setAttribute("stroke", "#fef08a");
-          c.setAttribute("stroke-width", "1.5");
+          c.setAttribute("fill", "#DC2626");
+          c.setAttribute("stroke", "#F59E0B");
+          c.setAttribute("stroke-width", "1.6");
           markersEl.appendChild(c);
         } else if (p.event === "shelter") {
           const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
           c.setAttribute("cx", p.x.toFixed(1));
           c.setAttribute("cy", p.y.toFixed(1));
           c.setAttribute("r", "4");
-          c.setAttribute("fill", "#38bdf8");
-          c.setAttribute("stroke", "#ffffff");
-          c.setAttribute("stroke-width", "1.5");
+          c.setAttribute("fill", "#0284C7");
+          c.setAttribute("stroke", "#FFFFFF");
+          c.setAttribute("stroke-width", "1.6");
           markersEl.appendChild(c);
         } else if (idx === pts.length - 1) {
           const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
           c.setAttribute("cx", p.x.toFixed(1));
           c.setAttribute("cy", p.y.toFixed(1));
-          c.setAttribute("r", "3.5");
-          c.setAttribute("fill", isEsc ? "#34d399" : "#fb7185");
+          c.setAttribute("r", "3.8");
+          c.setAttribute("fill", isEsc ? "#059669" : "#DC2626");
+          c.setAttribute("stroke", "#FFFFFF");
+          c.setAttribute("stroke-width", "1.2");
           markersEl.appendChild(c);
         }
       });
@@ -1233,6 +1240,7 @@
 
     const scoreInt = Math.round(state.simScore);
     const minInt = Math.round(state.simMinutes);
+    const pocketR = region.pocket_radius_m || 600;
 
     // 헤더 배지
     const badgeEl = document.getElementById("simStepBadge");
@@ -1244,6 +1252,28 @@
       badgeEl.textContent = `청정 탈출 중 (${minInt}분)`;
     } else {
       badgeEl.textContent = `회복 완료 (${minInt}분)`;
+    }
+
+    // 대화형 Toss 스타일 상태 헤드라인
+    const headlineEl = document.getElementById("simStatusHeadline");
+    if (headlineEl) {
+      if (state.routePhase === "idle") {
+        headlineEl.textContent = "출발 대기 중이에요. 주행을 시작하면 포켓 구간에서 수치가 올라요.";
+      } else if (state.routePhase === "recovered") {
+        headlineEl.textContent = "청정 주거권역에 도착했어요. 호흡기 게이지가 안전 수준으로 회복됐어요.";
+      } else if (state.routePhase === "escaping") {
+        headlineEl.textContent = state.shelterVisited
+          ? "이동노동자 쉼터 환기를 마치고 청정 권역으로 순환 주행하고 있어요."
+          : "배달 지연 0분으로 공기 맑은 외곽 청정 콜로 순환 중이에요.";
+      } else if (evalRes.distPocket <= pocketR * 0.55) {
+        headlineEl.textContent = "가스 포켓 중심을 지나고 있어요. 마스크를 통과하는 가스가 빠르게 쌓여요.";
+      } else if (evalRes.distPocket <= pocketR) {
+        headlineEl.textContent = "도로변 가스 포켓 안에 들어왔어요. 누적 흡입량이 계속 올라갑니다.";
+      } else if (evalRes.rate > 0.05) {
+        headlineEl.textContent = "대로변 상권을 주행하고 있어요. 아직 포켓 바깥이라 완만히 올라요.";
+      } else {
+        headlineEl.textContent = "포켓을 벗어나 환기되는 구간이에요. 누적 게이지가 서서히 내려갑니다.";
+      }
     }
 
     // 상태 필 & ESG 누적 포인트
@@ -1269,27 +1299,27 @@
     // 포켓 거리 & 변화율 바
     const distEl = document.getElementById("simPocketDist");
     distEl.textContent = evalRes.pocketBadge;
-    distEl.className = `sp-val ${evalRes.zoneClass}`;
+    distEl.className = `sp-val mono-num ${evalRes.zoneClass}`;
 
     const deltaEl = document.getElementById("simDeltaRate");
     if (state.routePhase === "idle") {
       deltaEl.textContent = "0.0점/분 (대기 중)";
-      deltaEl.className = "sp-val text-slate";
+      deltaEl.className = "sp-val mono-num text-slate";
     } else if (state.routePhase === "recovered") {
       deltaEl.textContent = "0.0점/분 (회복 완료)";
-      deltaEl.className = "sp-val text-emerald";
+      deltaEl.className = "sp-val mono-num text-emerald";
     } else if (evalRes.rate > 0.05) {
       deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 피폭 누적`;
-      deltaEl.className = evalRes.rate > 2.2 ? "sp-val text-rose" : "sp-val text-amber";
+      deltaEl.className = `sp-val mono-num ${evalRes.rate > 2.2 ? "text-rose" : "text-amber"}`;
     } else {
       deltaEl.textContent = `${evalRes.rate.toFixed(1)}점/분 ▼ 호흡기 환기`;
-      deltaEl.className = "sp-val text-emerald";
+      deltaEl.className = "sp-val mono-num text-emerald";
     }
 
     // 게이지 바
     const scoreEl = document.getElementById("gaugeScoreText");
     scoreEl.textContent = `${scoreInt}점 / 100점`;
-    scoreEl.style.color = scoreInt >= 80 ? "#f87171" : scoreInt >= 50 ? "#fbbf24" : "#34d399";
+    scoreEl.style.color = scoreInt >= 80 ? "#DC2626" : scoreInt >= 50 ? "#B45309" : "#047857";
     document.getElementById("gaugeFill").style.width = `${clamp(state.simScore, 0, 100)}%`;
 
     // 텔레메트리 (국소 NO2, CO-Hb, 뇌 산소/졸음 경보)
@@ -1299,22 +1329,22 @@
 
     const alertEl = document.getElementById("teleAlertLevel");
     if (state.routePhase === "recovered" || (state.routePhase === "escaping" && scoreInt < 40)) {
-      alertEl.textContent = "🟢 정상 회복 (환기 양호)";
+      alertEl.textContent = "정상 회복 (환기 양호)";
       alertEl.className = "tele-val text-emerald";
     } else if (state.routePhase === "escaping") {
-      alertEl.textContent = "🔵 환기 회복 중 (이탈)";
+      alertEl.textContent = "환기 회복 중 (이탈)";
       alertEl.className = "tele-val text-sky";
     } else if (scoreInt >= 80) {
-      alertEl.textContent = "🚨 위험 (졸음·추돌 고위험)";
+      alertEl.textContent = "위험 (졸음·추돌 고위험)";
       alertEl.className = "tele-val text-rose";
     } else if (scoreInt >= 55) {
-      alertEl.textContent = "🟠 경고 (경미한 두통·피로)";
+      alertEl.textContent = "경고 (두통·피로 누적)";
       alertEl.className = "tele-val text-amber";
     } else if (scoreInt >= 25) {
-      alertEl.textContent = "🟡 주의 (초기 기도 자극)";
+      alertEl.textContent = "주의 (초기 기도 자극)";
       alertEl.className = "tele-val text-sky";
     } else {
-      alertEl.textContent = "🟢 정상 (집중 양호)";
+      alertEl.textContent = "정상 (집중 양호)";
       alertEl.className = "tele-val text-emerald";
     }
 
@@ -1333,21 +1363,21 @@
       const isRec = state.routePhase === "recovered";
       const pill = document.getElementById("dispatchPill");
       pill.textContent = isRec
-        ? "✅ 청정 권역 안착 & 호흡기 환기 완료"
-        : "🚨 순환 배차 가동 · 외곽 청정 환기 중";
+        ? "청정 권역 안착 · 환기 완료"
+        : "순환 배차 가동 · 외곽 청정 환기 중";
       pill.classList.toggle("pill-recovered", isRec);
 
       document.getElementById("dispatchHeadline").textContent = isRec
-        ? `✅ 청정 권역 안착 완료! 가스 게이지 ${state.peakScoreBeforeEscape}점 → ${scoreInt}점 회복 (지연 0분)`
-        : `🚨 순환 배차 전환 (${state.peakScoreBeforeEscape}점 → 현재 ${scoreInt}점 하락 중) · '${call.order_title}'`;
+        ? `청정 권역에 도착해 게이지가 ${state.peakScoreBeforeEscape}점 → ${scoreInt}점으로 회복됐어요 (지연 0분)`
+        : `순환 배차 전환 (${state.peakScoreBeforeEscape}점 → 현재 ${scoreInt}점) · ${call.order_title}`;
       document.getElementById("dispatchOrderTitle").textContent = call.order_title;
       document.getElementById("dispatchDelay").textContent = call.delay_note;
       document.getElementById("dispatchShelter").textContent = state.shelterVisited
         ? `${call.shelter_name} · 환기 휴식 -18점 완료`
         : `${call.shelter_name} · 경유 예정 (-18점 환기)`;
       document.getElementById("rewardPointsChip").textContent = isRec
-        ? `🌿 그린 배차 포인트 ${call.green_points} 지급 완료`
-        : `🌿 도착 시 그린 포인트 ${call.green_points} 지급`;
+        ? `그린 포인트 ${call.green_points} 지급 완료`
+        : `도착 시 그린 포인트 ${call.green_points} 지급`;
 
       document.getElementById("mapOverlayBadge").textContent = isRec
         ? "청정 권역 환기 회복 완료"
@@ -1384,6 +1414,21 @@
       btn.classList.toggle("active", btn.dataset.region === state.activeRegionKey);
     });
 
+    const heroH1 = document.getElementById("heroRegionHeadline");
+    const heroSub = document.getElementById("heroRegionSub");
+    if (heroH1) {
+      heroH1.textContent = "";
+      heroH1.appendChild(document.createTextNode(`${region.name}, 도로변 이산화질소가 도시보다 `));
+      const span = document.createElement("span");
+      span.className = "hero-highlight mono-num";
+      span.textContent = `+${region.road.gap_no2_pct}%`;
+      heroH1.appendChild(span);
+      heroH1.appendChild(document.createTextNode(" 높아요"));
+    }
+    if (heroSub) {
+      heroSub.textContent = `${region.urban.stationName}(도시대기) 날씨앱은 '${region.urban.weather_grade}'이지만, ${region.road.displayName} 주행 구간엔 히든 가스 포켓이 형성돼 환기 전환이 필요합니다.`;
+    }
+
     document.getElementById("kpiUrbanName").textContent = region.urban.stationName;
     document.getElementById("kpiUrbanPm10").textContent = `${region.urban.pm10_mean} ㎍/㎥`;
     document.getElementById("kpiUrbanGrade").textContent = region.urban.weather_grade;
@@ -1392,9 +1437,9 @@
 
     document.getElementById("kpiRoadName").textContent = region.road.displayName;
     document.getElementById("kpiRoadNo2").textContent = `${region.road.no2_mean} ppm`;
-    document.getElementById("kpiGapBadge").textContent = `NO₂ +${region.road.gap_no2_pct}% 폭증`;
+    document.getElementById("kpiGapBadge").textContent = `NO₂ +${region.road.gap_no2_pct}%`;
     document.getElementById("kpiRoadSub").textContent =
-      `KF94 마스크 가스 방어율 0% · 피크 ${region.road.no2_peak} ppm (+${region.road.gap_no2_peak_pct}%)`;
+      `마스크 방어율 0% · 피크 ${region.road.no2_peak} ppm (+${region.road.gap_no2_peak_pct}%)`;
 
     document.getElementById("kpiRiskPeak").textContent = `${region.road.risk_peak} 점`;
     document.getElementById("kpiRiskGrade").textContent = region.road.road_grade;
@@ -1402,7 +1447,7 @@
       `24h 평균 ${region.road.risk_mean}점 (도시대기 대비 +${region.road.gap_risk_pct}%)`;
 
     document.getElementById("mapSubtitle").textContent =
-      `${region.name} · ${region.urban.stationName}(도시대기) vs ${region.road.displayName} 격차 분석`;
+      `${region.name} · ${region.urban.stationName}(도시대기) vs ${region.road.displayName} 측정망 비교`;
     document.getElementById("simZoneName").textContent = region.road.displayName;
 
     populateHourSelect(region);
@@ -1418,7 +1463,18 @@
     list.innerHTML = "";
     region.ai_briefing.forEach((line) => {
       const li = document.createElement("li");
-      li.textContent = line;
+      const sepIdx = line.indexOf(":");
+      if (sepIdx > 0 && sepIdx < 32) {
+        const lead = document.createElement("strong");
+        lead.className = "briefing-lead";
+        lead.textContent = line.slice(0, sepIdx).trim();
+        const body = document.createElement("span");
+        body.textContent = line.slice(sepIdx + 1).trim();
+        li.appendChild(lead);
+        li.appendChild(body);
+      } else {
+        li.textContent = line;
+      }
       list.appendChild(li);
     });
   }
@@ -1431,11 +1487,11 @@
     const isFallback = meta.mode === "fallback";
     badge.className = `status-badge ${isFallback ? "status-fallback" : "status-live"}`;
     badge.textContent = isFallback
-      ? `API 상태: 로컬 백업 Fallback 가동 중 (data.csv · ${meta.total_rows || 0}행)`
-      : `API 상태: 한국환경공단 에어코리아 v1.3 연동 완료 (data.csv · ${meta.total_rows || 0}행)`;
+      ? `로컬 백업 Fallback (${meta.total_rows || 0}행)`
+      : `에어코리아 v1.3 연동 (${meta.total_rows || 0}행)`;
 
     document.getElementById("kpiRowsCount").textContent = `${meta.total_rows || 0} 행`;
-    document.getElementById("kpiImputeBadge").textContent = `결측('-') ${meta.imputed_cell_count || 0}건 정제`;
+    document.getElementById("kpiImputeBadge").textContent = `결측 ${meta.imputed_cell_count || 0}건 정제`;
     document.getElementById("kpiMetaFoot").textContent =
       `서울 ${meta.station_count || 40}개 측정소 · 망구분 평균 Imputation 완료 (기준 ${meta.latest_data_time || "-"})`;
 
@@ -1468,15 +1524,15 @@
       const tr = document.createElement("tr");
       const isRoad = r.mangName === "도로변대기";
       tr.innerHTML = `
-        <td>${r.dataTime}</td>
+        <td class="mono-col">${r.dataTime}</td>
         <td><strong>${r.stationName}</strong></td>
         <td><span class="badge-mang ${isRoad ? "badge-road" : "badge-urban"}">${r.mangName}</span></td>
-        <td>${r.pm10Value}</td>
-        <td>${r.pm25Value}</td>
-        <td>${r.o3Value}</td>
-        <td><strong>${r.no2Value}</strong></td>
-        <td>${r.coValue}</td>
-        <td><strong class="${r.gas_risk >= 80 ? "text-rose" : "text-emerald"}">${r.gas_risk}점</strong></td>
+        <td class="mono-col">${r.pm10Value}</td>
+        <td class="mono-col">${r.pm25Value}</td>
+        <td class="mono-col">${r.o3Value}</td>
+        <td class="mono-col"><strong>${r.no2Value}</strong></td>
+        <td class="mono-col">${r.coValue}</td>
+        <td class="mono-col"><strong class="${r.gas_risk >= 80 ? "text-rose" : "text-emerald"}">${r.gas_risk}점</strong></td>
       `;
       fragment.appendChild(tr);
     });
@@ -1511,7 +1567,7 @@
   async function refreshData(mode) {
     const btn = mode === "fallback" ? document.getElementById("btnTestFallback") : document.getElementById("btnRefreshLive");
     const origText = btn.textContent;
-    btn.textContent = "수집·렌더링 중...";
+    btn.textContent = "수집 중...";
     btn.disabled = true;
 
     try {
@@ -1568,7 +1624,7 @@
         const hd = getHourData(region, state.simHour);
         addEventLog(
           state.simMinutes,
-          `🕒 운행 시간대 변경 → ${hd.label} (도로변 위험지수 ${hd.road_risk}점 반영)`,
+          `운행 시간대 변경 → ${hd.label} (도로변 위험지수 ${hd.road_risk}점 반영)`,
           ""
         );
         updateAllSimulatorVisuals(false);
@@ -1631,7 +1687,7 @@
     });
 
     document.getElementById("btnTileToggle").addEventListener("click", () => {
-      setTileLayer(state.tileMode === "dark" ? "osm" : "dark");
+      setTileLayer(state.tileMode === "dark" ? "light" : "dark");
     });
 
     document.getElementById("btnToggleAllStations").addEventListener("click", (e) => {

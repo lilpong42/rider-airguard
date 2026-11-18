@@ -3,336 +3,361 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rider-AirGuard : 도로변 가스 격차 분석 기반 배달 라이더 권역 순환 배차 AI</title>
+  <title>Rider-AirGuard — 한냥 Safety · 도로변 가스 격차 기반 순환 배차 AI</title>
   <meta name="description" content="에어코리아 도시대기 vs 도로변 측정망 가스(NO2·O3·CO) 격차 분석 기반 배달 라이더 보호 및 지연 0분 권역 순환 배차 AI 관제 시스템" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23FEF08A'/%3E%3Cstop offset='50%25' stop-color='%23F59E0B'/%3E%3Cstop offset='100%25' stop-color='%23B45309'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='18' cy='18' r='16.5' fill='url(%23g)'/%3E%3Cpath d='M18 7.5L26 10.9V17.4C26 22.3 22.5 26.3 18 27.8C13.5 26.3 10 22.3 10 17.4V10.9L18 7.5Z' fill='%230B0F17'/%3E%3Cpath d='M13 18.2H15.6L17.1 14.5L19 21.1L20.5 17.4H23' stroke='%2334D399' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="static/vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="static/css/style.css" />
 </head>
 <body>
-  <!-- A. 상단 관제 헤더 바 -->
+  <!-- A. 상단 내비게이션 바 (Frosted Ceramic + 한냥 브랜드 엠블럼) -->
   <header class="topbar">
     <div class="topbar-inner">
-      <div class="brand-area">
-        <div class="brand-logo" aria-hidden="true">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <path d="M14 2L24 6.2V13.6C24 19.8 19.7 24.8 14 26.5C8.3 24.8 4 19.8 4 13.6V6.2L14 2Z" stroke="#38BDF8" stroke-width="2" fill="#0F172A"/>
-            <path d="M8.5 14.5H11.5L13.2 10.5L15.4 17.5L17.2 13.5H19.5" stroke="#10B981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <div class="brand-lockup">
+        <div class="brand-emblem" aria-hidden="true">
+          <svg viewBox="0 0 38 38" width="38" height="38">
+            <defs>
+              <linearGradient id="hannyangGoldRim" x1="10%" y1="5%" x2="90%" y2="95%">
+                <stop offset="0%" stop-color="#FEF08A" />
+                <stop offset="48%" stop-color="#F59E0B" />
+                <stop offset="100%" stop-color="#B45309" />
+              </linearGradient>
+            </defs>
+            <circle cx="19" cy="19" r="17.2" fill="url(#hannyangGoldRim)" stroke="#78350F" stroke-width="0.9" />
+            <circle cx="19" cy="19" r="14.2" fill="#FFFBEB" opacity="0.24" />
+            <path d="M19 8.2L27.6 11.9V18.6C27.6 23.7 23.8 27.9 19 29.5C14.2 27.9 10.4 23.7 10.4 18.6V11.9L19 8.2Z" fill="#0B0F17" />
+            <path d="M13.6 19.2H16.3L17.9 15.2L19.9 22.3L21.5 18.3H24.2" stroke="#34D399" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" fill="none" />
           </svg>
         </div>
-        <div class="brand-text">
-          <h1>Rider-AirGuard : 도로변 가스 격차 분석 기반 배달 라이더 권역 순환 배차 AI</h1>
-          <p class="brand-sub">제1회 동양AI빅데이터융합 아이디어 공모전 (AI빅데이터분야) · 2학기 R프로그래밍 공공데이터 분석 연계 프로토타입</p>
+        <div class="brand-copy">
+          <div class="brand-title-row">
+            <span class="brand-wordmark">Rider-AirGuard</span>
+            <span class="hannyang-stamp">한냥 Safety AI</span>
+          </div>
+          <p class="brand-sub">도로변 가스 격차 분석 기반 배달 라이더 권역 순환 배차 관제 · R프로그래밍 공공데이터 연계</p>
         </div>
       </div>
 
-      <div class="header-controls">
-        <div class="api-status-group">
+      <div class="topbar-right">
+        <nav class="seg-track" aria-label="핵심 배달 권역 빠른 이동">
+          <button type="button" class="seg-btn region-tab active" data-region="gangnam">강남권역</button>
+          <button type="button" class="seg-btn region-tab" data-region="hongdae">홍대·신촌</button>
+          <button type="button" class="seg-btn region-tab" data-region="dongdaemun">동대문·외대</button>
+        </nav>
+
+        <div class="utility-controls">
           <span id="apiStatusBadge" class="status-badge status-live">
-            API 상태: 한국환경공단 에어코리아 v1.3 연동 완료 (data.csv)
+            에어코리아 v1.3 연동
           </span>
-          <button id="btnRefreshLive" class="btn-mini" title="실제 에어코리아 API에서 최신 데이터 다시 수집">
-            실시간 재수집
+          <button type="button" id="btnRefreshLive" class="btn-mini" title="실제 에어코리아 API에서 최신 데이터 다시 수집">
+            새로고침
           </button>
-          <button id="btnTestFallback" class="btn-mini btn-mini-outline" title="API 장애 상황 대비 로컬 백업 Fallback 모드 시연">
+          <button type="button" id="btnTestFallback" class="btn-mini btn-mini-outline" title="API 장애 상황 대비 로컬 백업 Fallback 모드 시연">
             Fallback 시연
           </button>
-          <button id="btnToggleAudio" class="btn-mini btn-mini-outline" title="경고음 알림 켜기/끄기">
+          <button type="button" id="btnToggleAudio" class="btn-mini btn-mini-outline" title="경고음 알림 켜기/끄기">
             🔊 경고음 ON
           </button>
         </div>
-
-        <nav class="region-tabs" aria-label="핵심 배달 권역 빠른 이동">
-          <button class="region-tab active" data-region="gangnam">
-            강남권역 <span class="tab-sub">(강남구 vs 강남대로)</span>
-          </button>
-          <button class="region-tab" data-region="hongdae">
-            홍대·신촌권역 <span class="tab-sub">(마포구 vs 홍대입구)</span>
-          </button>
-          <button class="region-tab" data-region="dongdaemun">
-            동대문·외대권역 <span class="tab-sub">(동대문구 vs 청계천로)</span>
-          </button>
-        </nav>
       </div>
     </div>
   </header>
 
-  <!-- 권역 핵심 KPI 요약 스트립 -->
-  <section class="kpi-strip" aria-label="선택 권역 실시간 측정망 격차 지표">
-    <div class="kpi-card">
-      <span class="kpi-label">일반 날씨앱 예보 (도시대기 <span id="kpiUrbanName">강남구</span>)</span>
-      <div class="kpi-value-row">
-        <strong id="kpiUrbanPm10" class="text-emerald">27.5 ㎍/㎥</strong>
-        <span id="kpiUrbanGrade" class="pill pill-safe">보통</span>
-      </div>
-      <span id="kpiUrbanSub" class="kpi-foot">NO₂ 0.0101 ppm · 가스 위험지수 55.0점</span>
-    </div>
-
-    <div class="kpi-card kpi-danger">
-      <span class="kpi-label">실제 도로변 측정망 (<span id="kpiRoadName">강남대로</span>)</span>
-      <div class="kpi-value-row">
-        <strong id="kpiRoadNo2" class="text-rose">0.0168 ppm</strong>
-        <span id="kpiGapBadge" class="pill pill-danger">NO₂ +65.3% 폭증</span>
-      </div>
-      <span id="kpiRoadSub" class="kpi-foot">KF94 마스크 가스 방어율 0% · 피크 0.032 ppm</span>
-    </div>
-
-    <div class="kpi-card">
-      <span class="kpi-label">도로변 가스 복합 위험지수 (NO₂·CO·O₃)</span>
-      <div class="kpi-value-row">
-        <strong id="kpiRiskPeak" class="text-amber">108.4 점</strong>
-        <span id="kpiRiskGrade" class="pill pill-warn">임계치 초과 구간</span>
-      </div>
-      <span id="kpiRiskSub" class="kpi-foot">순환 배차 자동 발동 기준: 누적 80점 이상</span>
-    </div>
-
-    <div class="kpi-card">
-      <span class="kpi-label">데이터 파이프라인 및 결측치 정제</span>
-      <div class="kpi-value-row">
-        <strong id="kpiRowsCount" class="text-sky">201 행</strong>
-        <span id="kpiImputeBadge" class="pill pill-info">결측('-') 19건 정제</span>
-      </div>
-      <span id="kpiMetaFoot" class="kpi-foot">서울 40개 측정소 · 망구분 평균 Imputation 완료</span>
-    </div>
-  </section>
-
-  <!-- 메인 관제 그리드: B. 좌측/중앙 지도 + C. 우측 라이더 시뮬레이터 -->
-  <main class="main-grid">
-    <!-- B. 좌측/중앙 패널: Leaflet.js 인터랙티브 배차 관제 지도 -->
-    <section class="panel map-panel" aria-label="배차 관제 인터랙티브 지도">
-      <div class="panel-header">
-        <div>
-          <h2>실시간 히든 가스 포켓(Hidden Gas Pocket) 및 순환 배차 지도</h2>
-          <p id="mapSubtitle" class="panel-sub">도시대기(주거지) vs 도로변대기(대로변) 측정망 격차 및 지자체 이동노동자 쉼터 위치</p>
-        </div>
-        <div class="map-controls">
-          <button id="btnMapClickDrive" class="btn-mini btn-mini-outline" title="활성화 후 지도를 클릭하면 라이더가 해당 위치로 직접 주행합니다">
-            📍 지도 클릭 주행: OFF
-          </button>
-          <button id="btnTileToggle" class="btn-mini btn-mini-outline" title="지도 타일 테마 전환">
-            지도 테마: 다크
-          </button>
-          <button id="btnToggleAllStations" class="btn-mini btn-mini-outline" title="서울 전역 40개 측정소 마커 표시 전환">
-            서울 전체 측정소
-          </button>
-        </div>
-      </div>
-
-      <div class="map-wrapper">
-        <div id="dispatchMap"></div>
-
-        <!-- 지도 상단 순환 배차 발동 오버레이 (80점 돌파 또는 수동 전환 시 노출) -->
-        <div id="mapDispatchOverlay" class="map-dispatch-overlay hidden" role="alert">
-          <div class="overlay-badge" id="mapOverlayBadge">AI 권역 탈출 순환 배차 발동</div>
-          <div class="overlay-title" id="mapOverlayTitle">외곽 청정 주거권역 행 우선 배차 경로 전환 완료</div>
-          <div class="overlay-desc" id="mapOverlayDesc">배달 지연 0분 · 인근 이동노동자 쉼터 경유 환기 회복 중</div>
-        </div>
-
-        <!-- 지도 범례 -->
-        <div class="map-legend">
-          <div class="legend-item"><span class="dot dot-green"></span> 도시대기 측정소 (날씨앱 보통)</div>
-          <div class="legend-item"><span class="dot dot-red pulse-dot"></span> 도로변 가스 포켓 (NO₂·CO·O₃ 위험)</div>
-          <div class="legend-item"><span class="dot dot-blue"></span> 지자체 이동노동자 쉼터 (-18점 환기)</div>
-          <div class="legend-item"><span class="line-sample line-red"></span> 대로변 정체·고농도 노출 루트</div>
-          <div class="legend-item"><span class="line-sample line-cyan"></span> 지연 0분 외곽 청정 순환 배차</div>
-        </div>
-
-        <div class="map-hint-chip">
-          💡 <strong>라이더(🛵)를 직접 드래그</strong>하거나 <strong>[지도 클릭 주행]</strong>을 켜서 가스 포켓 진입·이탈 시 수치 변화를 테스트하세요
-        </div>
+  <div class="page-shell">
+    <!-- Toss 스타일 직관적 요약 타이틀 -->
+    <section class="hero-summary" aria-label="선택 권역 요약">
+      <div>
+        <div class="hero-kicker">제1회 동양AI빅데이터융합 공모전 · 실시간 공공데이터 측정망 비교</div>
+        <h1 id="heroRegionHeadline">
+          강남·서초 상권, 도로변 이산화질소가 도시보다 <span class="hero-highlight">+65.3%</span> 높아요
+        </h1>
+        <p id="heroRegionSub" class="hero-desc">
+          강남구(도시대기) 날씨앱은 평온하지만 강남대로 주행 구간은 가스 포켓이 형성돼 라이더 환기 전환이 필요합니다.
+        </p>
       </div>
     </section>
 
-    <!-- C. 우측 패널: 라이더 가스 누적 게이지 & 순환 배차 시뮬레이터 -->
-    <aside class="panel simulator-panel" aria-label="라이더 가스 누적 게이지 및 순환 배차 시뮬레이터">
+    <!-- 핵심 KPI 4종 (균일한 세라믹 화이트 카드, 1카드 1핵심 수치) -->
+    <section class="kpi-strip" aria-label="선택 권역 실시간 측정망 격차 지표">
+      <div class="kpi-card">
+        <span class="kpi-label">날씨앱 기준 · 도시대기 (<span id="kpiUrbanName">강남구</span>)</span>
+        <div class="kpi-value-row">
+          <strong id="kpiUrbanPm10" class="mono-num text-emerald">27.5 ㎍/㎥</strong>
+          <span id="kpiUrbanGrade" class="pill pill-safe">좋음</span>
+        </div>
+        <span id="kpiUrbanSub" class="kpi-foot">NO₂ 0.0101 ppm · 가스 위험지수 55.0점</span>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">실제 주행로 · 도로변 (<span id="kpiRoadName">강남대로</span>)</span>
+        <div class="kpi-value-row">
+          <strong id="kpiRoadNo2" class="mono-num text-rose">0.0168 ppm</strong>
+          <span id="kpiGapBadge" class="pill pill-danger">NO₂ +65.3%</span>
+        </div>
+        <span id="kpiRoadSub" class="kpi-foot">KF94 마스크 가스 방어율 0% · 피크 0.032 ppm</span>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">피크타임 도로변 가스 복합 위험지수</span>
+        <div class="kpi-value-row">
+          <strong id="kpiRiskPeak" class="mono-num text-amber">108.4 점</strong>
+          <span id="kpiRiskGrade" class="pill pill-warn">임계치 초과</span>
+        </div>
+        <span id="kpiRiskSub" class="kpi-foot">누적 80점 도달 시 외곽 청정 순환 배차 자동 발동</span>
+      </div>
+
+      <div class="kpi-card">
+        <span class="kpi-label">에어코리아 수집 · 결측치 정제</span>
+        <div class="kpi-value-row">
+          <strong id="kpiRowsCount" class="mono-num text-sky">201 행</strong>
+          <span id="kpiImputeBadge" class="pill pill-info">결측 19건 정제</span>
+        </div>
+        <span id="kpiMetaFoot" class="kpi-foot">서울 40개 측정소 · 망구분 평균 Imputation 완료</span>
+      </div>
+    </section>
+
+    <!-- 메인 관제 그리드: B. 인터랙티브 배차 지도 + C. 라이더 시뮬레이터 -->
+    <main class="main-grid">
+      <!-- B. 좌측 패널: Leaflet.js 인터랙티브 배차 지도 -->
+      <section class="studio-panel map-panel" aria-label="배차 관제 인터랙티브 지도">
+        <div class="panel-header">
+          <div>
+            <h2>실시간 히든 가스 포켓 &amp; 순환 배차 지도</h2>
+            <p id="mapSubtitle" class="panel-sub">도시대기(주거지) vs 도로변대기(대로변) 측정망 격차 및 이동노동자 쉼터 위치</p>
+          </div>
+          <div class="map-controls">
+            <button type="button" id="btnMapClickDrive" class="btn-mini btn-mini-outline" title="활성화 후 지도를 클릭하면 라이더가 해당 위치로 주행합니다">
+              📍 지도 클릭 주행: OFF
+            </button>
+            <button type="button" id="btnTileToggle" class="btn-mini btn-mini-outline" title="지도 타일 테마 전환">
+              지도 테마: 라이트
+            </button>
+            <button type="button" id="btnToggleAllStations" class="btn-mini btn-mini-outline" title="서울 전역 40개 측정소 마커 표시 전환">
+              서울 전체 측정소
+            </button>
+          </div>
+        </div>
+
+        <div class="map-wrapper">
+          <div id="dispatchMap" class="map-light-tiles"></div>
+
+          <!-- 순환 배차 발동 토스트 (깔끔한 화이트 글래스 카드) -->
+          <div id="mapDispatchOverlay" class="map-dispatch-overlay hidden" role="alert">
+            <div class="overlay-badge" id="mapOverlayBadge">AI 권역 탈출 순환 배차 발동</div>
+            <div class="overlay-title" id="mapOverlayTitle">외곽 청정 주거권역 행 우선 배차 경로 전환 완료</div>
+            <div class="overlay-desc" id="mapOverlayDesc">배달 지연 0분 · 인근 이동노동자 쉼터 경유 환기 회복 중</div>
+          </div>
+
+          <div class="map-legend">
+            <div class="legend-item"><span class="dot dot-green"></span> 도시대기 측정소 (날씨앱 기준)</div>
+            <div class="legend-item"><span class="dot dot-red"></span> 도로변 가스 포켓 (NO₂·CO·O₃)</div>
+            <div class="legend-item"><span class="dot dot-blue"></span> 이동노동자 쉼터 (-18점 환기)</div>
+            <div class="legend-item"><span class="line-sample line-red"></span> 고농도 노출 대로변</div>
+            <div class="legend-item"><span class="line-sample line-cyan"></span> 지연 0분 청정 순환 경로</div>
+          </div>
+
+          <div class="map-hint-chip">
+            <strong>라이더(🛵)를 직접 끌거나</strong> <strong>지도 클릭 주행</strong>을 켜서 포켓 안팎의 수치 변화를 확인해 보세요
+          </div>
+        </div>
+      </section>
+
+      <!-- C. 우측 패널: 라이더 가스 누적 게이지 & 순환 배차 시뮬레이터 -->
+      <aside class="studio-panel simulator-panel" aria-label="라이더 가스 누적 게이지 및 순환 배차 시뮬레이터">
+        <div class="panel-header">
+          <div>
+            <h2>라이더 호흡기 보호 시뮬레이터</h2>
+            <p class="panel-sub">가스 포켓 통과 시 피폭 상승 · 쉼터 및 순환 배차 시 회복</p>
+          </div>
+          <span id="simStepBadge" class="step-badge mono-num">대기 (0분)</span>
+        </div>
+
+        <!-- 운행 시간대 (data.csv 24h 실측 연동) & 배속 -->
+        <div class="sim-env-bar">
+          <div class="env-group">
+            <label for="simHourSelect" class="env-label">운행 시간</label>
+            <select id="simHourSelect" class="env-select" aria-label="시뮬레이션 운행 시간대 선택"></select>
+            <span id="simHourContext" class="hour-context-pill mono-num">도로변 105.5점</span>
+          </div>
+          <div class="env-group">
+            <span class="env-label">배속</span>
+            <div class="seg-track speed-seg" role="group" aria-label="주행 시뮬레이션 배속">
+              <button type="button" class="seg-btn speed-btn active" data-speed="1">1×</button>
+              <button type="button" class="seg-btn speed-btn" data-speed="3">3×</button>
+              <button type="button" class="seg-btn speed-btn" data-speed="5">5×</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 라이더 프로필 & 대화형 상태 헤드라인 -->
+        <div class="rider-summary-section">
+          <div class="rider-top">
+            <div class="rider-avatar" aria-hidden="true">🛵</div>
+            <div class="rider-info">
+              <div class="rider-name">
+                <span>라이더 김성원</span>
+                <span id="riderPhasePill" class="rider-tag">대기 중</span>
+                <span id="esgScoreBadge" class="esg-pill mono-num">누적 0P · 탈출 0회</span>
+              </div>
+              <div class="rider-meta">
+                현재 구간 <strong id="simSegmentName">신사역 사거리 (출발 대기)</strong> · <span id="simZoneName">강남대로</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sim-headline-box">
+            <p id="simStatusHeadline" class="sim-headline-text">출발 대기 중이에요. 주행을 시작하면 포켓 구간을 지날 때 수치가 올라요.</p>
+          </div>
+
+          <!-- 누적 흡입 게이지 바 -->
+          <div class="gauge-block">
+            <div class="gauge-header">
+              <span>마스크 투과 가스 누적 흡입량</span>
+              <strong id="gaugeScoreText" class="gauge-score mono-num">0점 / 100점</strong>
+            </div>
+            <div class="gauge-track">
+              <div id="gaugeFill" class="gauge-fill" style="width: 0%;"></div>
+              <div class="gauge-threshold" title="임계치 80점: 순환 배차 자동 발동">
+                <span>80점 기준</span>
+              </div>
+            </div>
+            <div class="gauge-scale">
+              <span>0 안전</span>
+              <span>40 주의</span>
+              <span>80 순환 발동</span>
+              <span>100 위험</span>
+            </div>
+          </div>
+
+          <!-- 공간 위치 & 변화율 -->
+          <div class="spatial-status-bar">
+            <div class="spatial-cell">
+              <span class="sp-label">가스 포켓 거리</span>
+              <strong id="simPocketDist" class="sp-val mono-num text-emerald">1,800m · 포켓 외곽</strong>
+            </div>
+            <div class="spatial-cell">
+              <span class="sp-label">분당 게이지 변화</span>
+              <strong id="simDeltaRate" class="sp-val mono-num text-slate">0.0점/분 (대기 중)</strong>
+            </div>
+          </div>
+
+          <!-- 생체·대기 텔레메트리 -->
+          <div class="telemetry-grid">
+            <div class="tele-box">
+              <span class="tele-label">현재 흡입 NO₂</span>
+              <strong id="teleNo2" class="tele-val mono-num">0.0101 ppm</strong>
+            </div>
+            <div class="tele-box">
+              <span class="tele-label">CO-Hb 추정치</span>
+              <strong id="teleCohb" class="tele-val mono-num">0.7 %</strong>
+            </div>
+            <div class="tele-box">
+              <span class="tele-label">집중·산소 상태</span>
+              <strong id="teleAlertLevel" class="tele-val text-emerald">정상 (집중 양호)</strong>
+            </div>
+          </div>
+
+          <!-- 실시간 SVG 추이 그래프 -->
+          <div class="trend-chart-wrap">
+            <div class="trend-header">
+              <span>피폭 · 환기 추이</span>
+              <span class="trend-legend">
+                <span><i class="lg-dot lg-red"></i>피폭</span>
+                <span><i class="lg-dot lg-green"></i>환기회복</span>
+                <span><i class="lg-dot lg-blue"></i>쉼터(-18점)</span>
+              </span>
+            </div>
+            <svg id="simTrendSvg" class="trend-svg" viewBox="0 0 360 78" preserveAspectRatio="none" aria-label="실시간 가스 게이지 변화 그래프">
+              <line x1="0" y1="19.4" x2="360" y2="19.4" stroke="#D97706" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.7" />
+              <text x="4" y="15" fill="#92400E" font-size="9" font-weight="700">80점 기준</text>
+              <path id="simTrendArea" d="" fill="rgba(220, 38, 38, 0.12)" />
+              <path id="simTrendPath" d="" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+              <g id="simTrendMarkers"></g>
+            </svg>
+          </div>
+        </div>
+
+        <!-- 조작 버튼 (Obsidian Primary CTA + Clean Outlines) -->
+        <div class="sim-actions-grid">
+          <button type="button" id="btnSimPlayPause" class="btn-ink">
+            ▶ 실시간 구간 주행 시작
+          </button>
+          <button type="button" id="btnSimStep" class="btn-outline">
+            +30분 구간 주행
+          </button>
+          <button type="button" id="btnManualEscape" class="btn-escape-action">
+            수동 순환배차 전환
+          </button>
+          <button type="button" id="btnSimReset" class="btn-ghost">
+            초기화
+          </button>
+        </div>
+
+        <!-- 순환 배차 발동 카드 -->
+        <div id="dispatchApprovalCard" class="dispatch-card hidden" role="status">
+          <div class="dispatch-header">
+            <span id="dispatchPill" class="dispatch-pill">순환 배차 가동 중</span>
+            <h3 id="dispatchHeadline">외곽 청정 주거권역 행 우선 순환 배차가 시작되었어요</h3>
+          </div>
+          <div class="dispatch-body">
+            <div class="dispatch-row">
+              <span class="d-key">우선 배차 콜</span>
+              <span class="d-val text-sky" id="dispatchOrderTitle">도곡·개포 양재천변 청정 주거단지 행 단건배달</span>
+            </div>
+            <div class="dispatch-row">
+              <span class="d-key">배달 지연</span>
+              <span class="d-val text-emerald" id="dispatchDelay">0분 (차량 흐름 원활한 외곽 주거지 행 우선 배정)</span>
+            </div>
+            <div class="dispatch-row">
+              <span class="d-key">환기·쉼터 연계</span>
+              <span class="d-val" id="dispatchShelter">서초 휴서울 이동노동자 쉼터 경유</span>
+            </div>
+            <div class="dispatch-rewards">
+              <span class="reward-chip" id="rewardPointsChip">그린 포인트 +500P 예정</span>
+              <span class="reward-chip">시간제 보험료 4.5% 할인</span>
+              <span class="reward-chip">추돌사고 위험 65% 감소</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 실시간 구간 관제 로그 -->
+        <div class="section-divider">
+          <div class="briefing-title">
+            <span>실시간 관제 로그</span>
+            <span class="briefing-tag">좌표 기반 추적</span>
+          </div>
+          <ul id="simEventLog" class="event-log-list">
+            <li><span class="ev-time">[대기]</span> 신사역 사거리 대기 중 — 주행 시작 시 구간별 피폭량이 실시간 누적됩니다.</li>
+          </ul>
+        </div>
+
+        <!-- AI 산재·보험 손해율 분석 브리핑 -->
+        <div class="section-divider">
+          <div class="briefing-title">
+            <span>AI 산재·보험 손해율 분석</span>
+            <span class="briefing-tag">data.csv 실측</span>
+          </div>
+          <ul id="aiBriefingList" class="briefing-list">
+            <li>데이터 분석 결과를 불러오는 중입니다...</li>
+          </ul>
+        </div>
+      </aside>
+    </main>
+
+    <!-- D. R 통계 차트 2종 -->
+    <section class="studio-panel charts-panel" aria-label="R 통계 시각화 차트">
       <div class="panel-header">
         <div>
-          <h2>라이더 가스 누적 흡입 &amp; 순환 배차 AI</h2>
-          <p class="panel-sub">가스 포켓 구간 통과 시 피폭 상승 · 순환 배차 및 쉼터 경유 시 환기 회복</p>
-        </div>
-        <span id="simStepBadge" class="step-badge">대기 (0분)</span>
-      </div>
-
-      <!-- 0. 운행 시간대 (data.csv 24h 실측 연동) & 배속 제어 바 -->
-      <div class="sim-env-bar">
-        <div class="env-group">
-          <label for="simHourSelect" class="env-label">운행 시간대</label>
-          <select id="simHourSelect" class="env-select" aria-label="시뮬레이션 운행 시간대 선택"></select>
-          <span id="simHourContext" class="hour-context-pill">도로변 105.5점</span>
-        </div>
-        <div class="env-group">
-          <span class="env-label">배속</span>
-          <div class="speed-group" role="group" aria-label="주행 시뮬레이션 배속">
-            <button class="speed-btn active" data-speed="1">1×</button>
-            <button class="speed-btn" data-speed="3">3×</button>
-            <button class="speed-btn" data-speed="5">5×</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 1. 라이더 실시간 상태 & 공간 피폭 카드 -->
-      <div class="rider-card">
-        <div class="rider-top">
-          <div class="rider-avatar" aria-hidden="true">🛵</div>
-          <div class="rider-info">
-            <div class="rider-name">
-              <span>라이더 김성원</span>
-              <span id="riderPhasePill" class="rider-tag">대기 중</span>
-              <span id="esgScoreBadge" class="esg-pill">누적 0P · 탈출 0회</span>
-            </div>
-            <div class="rider-meta">현재 구간: <strong id="simSegmentName">신사역 사거리 (출발 대기)</strong></div>
-            <div class="rider-meta">
-              권역 축: <span id="simZoneName">강남대로</span> ·
-              <span class="text-amber">KF94 가스 방어율 0%</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 실시간 공간 위치 & 증감 속도 상태 바 -->
-        <div class="spatial-status-bar">
-          <div class="spatial-cell">
-            <span class="sp-label">가스 포켓 중심 거리</span>
-            <strong id="simPocketDist" class="sp-val text-emerald">1,800m · 포켓 외곽</strong>
-          </div>
-          <div class="spatial-cell">
-            <span class="sp-label">실시간 호흡기 변화율</span>
-            <strong id="simDeltaRate" class="sp-val text-slate">0.0점/분 (대기 중)</strong>
-          </div>
-        </div>
-
-        <!-- 마스크 투과 가스 누적 흡입 게이지 바 -->
-        <div class="gauge-block">
-          <div class="gauge-header">
-            <span>마스크 투과 가스(NO₂ · O₃ · CO) 누적 흡입 게이지</span>
-            <strong id="gaugeScoreText" class="gauge-score">0점 / 100점</strong>
-          </div>
-          <div class="gauge-track">
-            <div id="gaugeFill" class="gauge-fill" style="width: 0%;"></div>
-            <div class="gauge-threshold" title="임계치 80점: 순환 배차 자동 발동">
-              <span>80점 임계</span>
-            </div>
-          </div>
-          <div class="gauge-scale">
-            <span>0 안전</span>
-            <span>40 주의</span>
-            <span>80 임계치</span>
-            <span>100 위험</span>
-          </div>
-        </div>
-
-        <!-- 실시간 흡입 수치 및 뇌 산소/졸음 경고 레벨 -->
-        <div class="telemetry-grid">
-          <div class="tele-box">
-            <span class="tele-label">현재 흡입 NO₂</span>
-            <strong id="teleNo2" class="tele-val">0.0101 ppm</strong>
-          </div>
-          <div class="tele-box">
-            <span class="tele-label">CO-Hb 추정 농도</span>
-            <strong id="teleCohb" class="tele-val">0.7 %</strong>
-          </div>
-          <div class="tele-box">
-            <span class="tele-label">뇌 산소·졸음 경보</span>
-            <strong id="teleAlertLevel" class="tele-val text-emerald">정상 (집중 양호)</strong>
-          </div>
-        </div>
-
-        <!-- 실시간 누적·환기 추이 SVG 차트 -->
-        <div class="trend-chart-wrap">
-          <div class="trend-header">
-            <span>실시간 가스 피폭·환기 추이</span>
-            <span class="trend-legend">
-              <i class="lg-dot lg-red"></i>피폭
-              <i class="lg-dot lg-green"></i>환기회복
-              <i class="lg-dot lg-blue"></i>쉼터휴식
-            </span>
-          </div>
-          <svg id="simTrendSvg" class="trend-svg" viewBox="0 0 360 78" preserveAspectRatio="none" aria-label="실시간 가스 게이지 변화 그래프">
-            <line x1="0" y1="15.6" x2="360" y2="15.6" stroke="#fde047" stroke-width="1" stroke-dasharray="4 3" opacity="0.65" />
-            <text x="4" y="13" fill="#fde047" font-size="9" font-weight="700">80점 임계</text>
-            <path id="simTrendArea" d="" fill="rgba(56, 189, 248, 0.14)" />
-            <path id="simTrendPath" d="" fill="none" stroke="#38bdf8" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-            <g id="simTrendMarkers"></g>
-          </svg>
-        </div>
-      </div>
-
-      <!-- 2. 시연 조작 버튼 4종 -->
-      <div class="sim-actions-grid">
-        <button id="btnSimPlayPause" class="btn-play">
-          ▶ 실시간 구간 주행 시작
-        </button>
-        <button id="btnSimStep" class="btn-primary">
-          ⏱️ +30분 구간 주행
-        </button>
-        <button id="btnManualEscape" class="btn-escape">
-          🌿 수동 순환배차 전환
-        </button>
-        <button id="btnSimReset" class="btn-secondary">
-          🔄 초기화
-        </button>
-      </div>
-
-      <!-- 3. 임계치(80점) 돌파 또는 수동 전환 시 '권역 탈출 순환 배차' 카드 -->
-      <div id="dispatchApprovalCard" class="dispatch-card hidden" role="status">
-        <div class="dispatch-header">
-          <span id="dispatchPill" class="dispatch-pill">Web Audio 경보 발령 · 순환 배차 가동</span>
-          <h3 id="dispatchHeadline">🚨 가스 누적 임계치 도달! '외곽 청정 주거권역 행' 우선 순환 배차 발동</h3>
-        </div>
-        <div class="dispatch-body">
-          <div class="dispatch-row">
-            <span class="d-key">우선 배차 콜</span>
-            <span class="d-val text-sky" id="dispatchOrderTitle">도곡·개포 양재천변 청정 주거단지 행 단건배달</span>
-          </div>
-          <div class="dispatch-row">
-            <span class="d-key">배달 지연 시간</span>
-            <span class="d-val text-emerald" id="dispatchDelay">0분 (느린 골목길 우회 대신 차가 막히지 않는 외곽 주거지 행 콜 우선 매칭)</span>
-          </div>
-          <div class="dispatch-row">
-            <span class="d-key">환기·쉼터 연계</span>
-            <span class="d-val" id="dispatchShelter">서초 휴서울 이동노동자 쉼터 경유</span>
-          </div>
-          <div class="dispatch-rewards">
-            <span class="reward-chip" id="rewardPointsChip">🌿 그린 배차 포인트 +500P 예정</span>
-            <span class="reward-chip">🛡️ 시간제 보험료 4.5% 할인</span>
-            <span class="reward-chip">📉 추돌사고 위험 65% 감소</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. 실시간 구간 관제 이벤트 로그 -->
-      <div class="event-log-box">
-        <div class="briefing-title">
-          <span>실시간 구간 관제 이벤트 로그</span>
-          <span class="briefing-tag">공간 좌표 기반 추적</span>
-        </div>
-        <ul id="simEventLog" class="event-log-list">
-          <li><span class="ev-time">[대기]</span> 신사역 사거리 대기 중 — 주행 시작 시 구간별 피폭량이 실시간 누적됩니다.</li>
-        </ul>
-      </div>
-
-      <!-- 5. AI 산재·보험 손해율 분석 브리핑 박스 -->
-      <div class="briefing-box">
-        <div class="briefing-title">
-          <span>AI 산재·보험 손해율 분석 브리핑</span>
-          <span class="briefing-tag">data.csv 실시간 연산</span>
-        </div>
-        <ul id="aiBriefingList" class="briefing-list">
-          <li>데이터 분석 결과를 불러오는 중입니다...</li>
-        </ul>
-      </div>
-    </aside>
-  </main>
-
-  <!-- D. 하단 패널: R 과제 연계 통계 차트 2종 & data.csv 원본 뷰어 + BM 요약 -->
-  <section class="bottom-section" aria-label="R 통계 시각화 및 원본 데이터 검증">
-    <div class="panel charts-panel">
-      <div class="panel-header">
-        <div>
-          <h2>R프로그래밍 연계 공공데이터 통계 분석 차트 (제안서 서식 4 증빙용 300 DPI)</h2>
-          <p class="panel-sub">에어코리아 실측 <code>data.csv</code>를 <code>analysis.R</code> 및 <code>generate_charts.py</code>로 자동 시각화 (우클릭으로 이미지 저장 가능)</p>
+          <h2>공공데이터 통계 분석 차트 (제안서 서식 4 · 300 DPI)</h2>
+          <p class="panel-sub">수집·정제한 <code>data.csv</code>를 <code>analysis.R</code> 및 <code>generate_charts.py</code>로 시각화했습니다 (클릭 시 확대).</p>
         </div>
         <div class="chart-actions">
-          <button id="btnViewRCode" class="btn-mini">📥 analysis.R 코드 보기</button>
-          <a href="data.csv" download="data.csv" class="btn-mini btn-mini-accent">📥 data.csv 다운로드</a>
+          <button type="button" id="btnViewRCode" class="btn-mini">analysis.R 코드 보기</button>
+          <a href="data.csv" download="data.csv" class="btn-mini btn-mini-accent">data.csv 다운로드</a>
         </div>
       </div>
 
@@ -340,30 +365,30 @@
         <figure class="chart-card">
           <img id="imgChart1" src="static/charts/chart1_network_gap.png" alt="동일 권역 내 일반 도시대기 vs 도로변 대기측정망 가스상 오염물질 농도 격차 막대그래프" loading="lazy" />
           <figcaption>
-            <strong>[Chart 1] 측정망 간 가스 농도 격차 (chart1_network_gap.png)</strong>
-            <span>클릭하면 원본 고해상도 이미지로 확대됩니다.</span>
+            <strong>측정망 간 가스 농도 격차 비교 (chart1_network_gap.png)</strong>
+            <span>도시대기와 도로변대기의 NO₂·CO·O₃ 및 복합 위험지수 격차를 비교합니다.</span>
           </figcaption>
         </figure>
 
         <figure class="chart-card">
           <img id="imgChart2" src="static/charts/chart2_hourly_exposure.png" alt="시간대별 도로변 가스 위험지수 추이 및 배달 콜 피크타임 노출 분석 꺾은선그래프" loading="lazy" />
           <figcaption>
-            <strong>[Chart 2] 24시간 도로변 가스 추이 및 배달 피크타임 중첩 (chart2_hourly_exposure.png)</strong>
-            <span>점심(11~14시)·저녁(17~21시) 피크와 도로변 가스 폭증 구간 교차 검증</span>
+            <strong>24시간 도로변 가스 추이 및 배달 피크 중첩 (chart2_hourly_exposure.png)</strong>
+            <span>점심(11~14시)·저녁(17~21시) 배달 피크와 가스 위험 임계(80점) 돌파 구간을 확인합니다.</span>
           </figcaption>
         </figure>
       </div>
-    </div>
+    </section>
 
-    <!-- data.csv 원본 데이터 테이블 뷰어 -->
-    <div class="panel table-panel">
+    <!-- 원본 데이터 테이블 뷰어 -->
+    <section class="studio-panel table-panel" aria-label="원본 데이터 검증 테이블">
       <div class="panel-header">
         <div>
-          <h2>수집·정제 완료 원본 데이터 뷰어 (<code>data.csv</code>)</h2>
+          <h2>수집·정제 완료 원본 데이터 (<code>data.csv</code>)</h2>
           <p class="panel-sub" id="tableSummary">에어코리아 API 실측 및 결측치('-') 망구분 평균 Imputation 완료 데이터</p>
         </div>
         <div class="table-filters">
-          <input id="csvSearchInput" type="search" placeholder="측정소명 검색 (예: 강남대로, 신촌로)" aria-label="측정소명 검색" />
+          <input id="csvSearchInput" type="search" placeholder="측정소 검색 (예: 강남대로, 신촌로)" aria-label="측정소명 검색" />
           <select id="csvMangFilter" aria-label="망구분 필터">
             <option value="ALL">전체 측정망</option>
             <option value="도로변대기">도로변대기만 보기</option>
@@ -376,9 +401,9 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>측정일시 (dataTime)</th>
-              <th>측정소명 (stationName)</th>
-              <th>망구분 (mangName)</th>
+              <th>측정일시</th>
+              <th>측정소명</th>
+              <th>망구분</th>
               <th>PM10 (㎍/㎥)</th>
               <th>PM2.5 (㎍/㎥)</th>
               <th>O₃ (ppm)</th>
@@ -392,27 +417,27 @@
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
 
-    <!-- 비즈니스 수익 모델 (B2B / B2G) 요약 스트립 -->
-    <div class="bm-strip">
+    <!-- 비즈니스 수익 모델 (B2B / B2G) -->
+    <section class="bm-strip" aria-label="비즈니스 수익 모델">
       <div class="bm-card">
         <span class="bm-tag">B2B SaaS</span>
         <h3>배달 플랫폼 권역 순환 배차 API 구독</h3>
-        <p>배민·쿠팡이츠 등에 실시간 도로변 가스 위험도·순환 콜 매칭 API를 월 구독료로 공급하여 플랫폼의 의무 산재보험료 및 호흡기·졸음사고 보상 리스크를 절감합니다.</p>
+        <p>배민·쿠팡이츠 등에 실시간 도로변 가스 위험도·순환 콜 매칭 API를 월 구독료로 공급해 플랫폼의 의무 산재보험료와 호흡기·졸음사고 비용을 절감합니다.</p>
       </div>
       <div class="bm-card">
         <span class="bm-tag">B2B InsurTech</span>
         <h3>이륜차 시간제 유상운송 보험 연동</h3>
-        <p>순환 배차 및 위험 회피 운행을 준수한 라이더에게 보험료 4.5%를 즉시 할인해 주고, 보험사의 사고 손해율 감소에 따른 제휴 수수료를 수취합니다.</p>
+        <p>순환 배차와 안전 권역 주행을 준수한 라이더에게 보험료 4.5%를 즉시 할인하고, 보험사의 사고 손해율 감소에 따른 제휴 수수료를 수취합니다.</p>
       </div>
       <div class="bm-card">
         <span class="bm-tag">B2G Public Safety</span>
         <h3>지자체 이동노동자 쉼터 스마트 관제</h3>
         <p>가스 누적 위험 임계치에 도달한 라이더를 지자체 이동노동자 쉼터로 자동 연계하고, 지자체 스마트 노동 안전 관제 시스템 구축 예산으로 납품합니다.</p>
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
 
   <!-- analysis.R 코드 모달 -->
   <div id="rCodeModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="rModalTitle">
@@ -421,9 +446,9 @@
       <div class="modal-header">
         <h3 id="rModalTitle">analysis.R — R프로그래밍 실습 과제 및 공모전 증빙 R 스크립트</h3>
         <div class="modal-actions">
-          <button id="btnCopyRCode" class="btn-mini">코드 복사</button>
-          <a href="analysis.R" download="analysis.R" class="btn-mini btn-mini-accent">analysis.R 다운로드</a>
-          <button id="btnCloseRModal" class="btn-mini btn-mini-outline">닫기</button>
+          <button type="button" id="btnCopyRCode" class="btn-mini">코드 복사</button>
+          <a href="analysis.R" download="analysis.R" class="btn-mini btn-mini-accent">다운로드</a>
+          <button type="button" id="btnCloseRModal" class="btn-mini btn-mini-outline">닫기</button>
         </div>
       </div>
       <pre id="rCodeContent" class="code-viewer">불러오는 중...</pre>
@@ -436,7 +461,7 @@
     <div class="modal-content modal-image">
       <div class="modal-header">
         <h3 id="zoomChartTitle">통계 차트 고해상도 보기</h3>
-        <button id="btnCloseZoomModal" class="btn-mini btn-mini-outline">닫기</button>
+        <button type="button" id="btnCloseZoomModal" class="btn-mini btn-mini-outline">닫기</button>
       </div>
       <img id="zoomChartImg" src="" alt="확대된 통계 차트" />
     </div>
