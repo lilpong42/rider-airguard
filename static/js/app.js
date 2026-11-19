@@ -9,10 +9,10 @@
     staticMode: false,
     activeRegionKey: "gangnam",
     simHour: 18, // 18시 저녁 피크 기본
-    simSpeed: 1, // 1 | 3 | 5
+    simSpeed: 3, // 1 | 3 | 5 (기본 3배속으로 즉각적 체감)
     simRunning: false,
     simTimer: null,
-    mapClickMode: false,
+    mapClickMode: true,
     customTarget: null, // [lat, lng]
     manualPositionHold: false,
     routePhase: "idle", // "idle" | "danger" | "escaping" | "recovered"
@@ -309,13 +309,13 @@
     const hd = getHourData(region, state.simHour);
     const lvl =
       hd.road_risk >= 95
-        ? "큰길 매연 매우 심함"
+        ? "매우 심함"
         : hd.road_risk >= 75
-        ? "큰길 매연 심함"
+        ? "매연 심함"
         : hd.road_risk >= 55
-        ? "큰길 매연 보통"
-        : "새벽 공기 양호";
-    pill.textContent = `${lvl} (${Math.round(hd.road_risk)}점)`;
+        ? "보통"
+        : "공기 양호";
+    pill.textContent = `${lvl} · ${Math.round(hd.road_risk)}점`;
     pill.title = `도로변 위험지수 ${hd.road_risk}점 vs 동네 ${hd.urban_risk}점`;
     pill.classList.toggle("pill-cool", hd.road_risk < 75);
   }
@@ -748,7 +748,7 @@
     if (region) {
       const startPt = region.danger_route[0];
       state.riderLatLng = [startPt[0], startPt[1]];
-      state.currentSegmentLabel = `${region.danger_waypoints[0]} (출발 대기)`;
+      state.currentSegmentLabel = region.danger_waypoints[0];
       state.dangerTrailPoints = [[startPt[0], startPt[1]]];
       state.escapeTrailPoints = [];
     }
@@ -897,7 +897,7 @@
     const gapRatio = (1 + (region.road.gap_no2_pct || 0) / 100).toFixed(1);
     const peakRatio = (1 + (region.road.gap_no2_peak_pct || 0) / 100).toFixed(1);
 
-    // 1. 큰길 매연 집중 구간 원 (핵심 + 외곽 2단 시각화)
+    // 1. 큰길 매연 집중 구간 원 (핵심 + 외곽 2단 시각화, 클릭 이벤트 통과)
     state.pocketCircle = L.circle(region.road.coords, {
       radius: pocketR,
       color: "#DC2626",
@@ -905,6 +905,7 @@
       dashArray: "6 6",
       fillColor: "#DC2626",
       fillOpacity: isEscaping ? 0.10 : 0.18,
+      interactive: false,
     }).addTo(state.regionLayer);
 
     L.circle(region.road.coords, {
@@ -1143,12 +1144,17 @@
   // --- 실시간 SVG 피폭·환기 추이 그래프 렌더링 ---
   function renderTrendChart() {
     const svg = document.getElementById("simTrendSvg");
+    const wrapEl = document.getElementById("trendChartWrap");
     if (!svg) return;
     const hist = state.simHistory;
+    if (wrapEl) {
+      wrapEl.classList.toggle("hidden", !hist || hist.length < 2);
+    }
+
     const W = 360;
-    const H = 78;
+    const H = 66;
     const padX = 6;
-    const yOf = (sc) => 73 - (clamp(sc, 0, 100) / 100) * 67; // 0->73, 100->6, 80->19.4
+    const yOf = (sc) => 61 - (clamp(sc, 0, 100) / 100) * 55; // 0->61, 100->6, 80->17.0
 
     // 동적 임계치 라인 위치 보정
     const threshLine = svg.querySelector("line");
@@ -1189,7 +1195,7 @@
     const toLine = (arr) => arr.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
     const toArea = (arr) =>
       arr.length >= 2
-        ? `${toLine(arr)} L${arr[arr.length - 1].x.toFixed(1)},73 L${arr[0].x.toFixed(1)},73 Z`
+        ? `${toLine(arr)} L${arr[arr.length - 1].x.toFixed(1)},61 L${arr[0].x.toFixed(1)},61 Z`
         : "";
 
     const isEsc = state.routePhase === "escaping" || state.routePhase === "recovered";
@@ -1272,34 +1278,34 @@
     // 헤더 배지
     const badgeEl = document.getElementById("simStepBadge");
     if (state.routePhase === "idle") {
-      badgeEl.textContent = "대기 (0분)";
+      badgeEl.textContent = "대기 · 0분";
     } else if (state.routePhase === "danger") {
-      badgeEl.textContent = `큰길 주행 (${minInt}분)`;
+      badgeEl.textContent = `큰길 · ${minInt}분`;
     } else if (state.routePhase === "escaping") {
-      badgeEl.textContent = `맑은 콜 이동 (${minInt}분)`;
+      badgeEl.textContent = `맑은 콜 · ${minInt}분`;
     } else {
-      badgeEl.textContent = `회복 완료 (${minInt}분)`;
+      badgeEl.textContent = `회복 완료 · ${minInt}분`;
     }
 
     // 대화형 라이더 상태 헤드라인
     const headlineEl = document.getElementById("simStatusHeadline");
     if (headlineEl) {
       if (state.routePhase === "idle") {
-        headlineEl.textContent = "출발 전이에요. 주행을 시작하면 빨간 매연 구간에서 피로도가 올라요.";
+        headlineEl.textContent = "주행을 시작하면 큰길 매연 구간에서 피로도가 올라가요.";
       } else if (state.routePhase === "recovered") {
-        headlineEl.textContent = "맑은 동네 콜에 도착했어요! 쌓였던 매연 피로도가 안전 수준으로 내려갔어요.";
+        headlineEl.textContent = "맑은 동네 콜에 도착해 매연 피로도가 안전 수준으로 내려갔어요.";
       } else if (state.routePhase === "escaping") {
         headlineEl.textContent = state.shelterVisited
-          ? "라이더 쉼터에서 잠깐 숨 돌리고 맑은 동네로 안전하게 이동하고 있어요."
+          ? "라이더 쉼터에서 잠깐 쉬고 맑은 동네로 안전하게 이동 중이에요."
           : "배달 지연 0분으로 공기 맑은 동네 콜을 받아 빠져나가는 중이에요.";
       } else if (evalRes.distPocket <= pocketR * 0.55) {
-        headlineEl.textContent = "매연이 가장 독한 한가운데를 지나고 있어요! 마스크가 막지 못해 빠르게 쌓여요.";
+        headlineEl.textContent = "매연 한가운데! 마스크로 걸러지지 않아 피로도가 빠르게 쌓여요.";
       } else if (evalRes.distPocket <= pocketR) {
-        headlineEl.textContent = "큰길 매연 구간 안에 들어왔어요. 피로도가 계속 올라가고 있습니다.";
+        headlineEl.textContent = "큰길 매연 집중 구간 안을 달리고 있어 피로도가 계속 올라요.";
       } else if (evalRes.rate > 0.05) {
-        headlineEl.textContent = "큰길 초입을 달리고 있어요. 아직 중심부는 아니라 천천히 올라요.";
+        headlineEl.textContent = "큰길 초입을 달리고 있어요. 중심부로 갈수록 피로도가 빨라져요.";
       } else {
-        headlineEl.textContent = "매연 구간을 벗어나 공기가 맑은 곳이에요. 피로도가 서서히 내려갑니다.";
+        headlineEl.textContent = "매연 구간 밖 맑은 공기예요. 피로도가 서서히 내려갑니다.";
       }
     }
 
@@ -1318,32 +1324,32 @@
       phasePill.textContent = "회복 완료";
     }
     document.getElementById("esgScoreBadge").textContent =
-      `누적 ${state.esgPoints.toLocaleString()}P · 탈출 ${state.escapeCount}회`;
+      `${state.esgPoints.toLocaleString()}P · 탈출 ${state.escapeCount}회`;
 
     document.getElementById("simSegmentName").textContent =
-      state.currentSegmentLabel || `${region.danger_waypoints[0]} (출발 대기)`;
+      state.currentSegmentLabel || region.danger_waypoints[0];
 
-    // 매연 거리 & 변화 속도
+    // 매연 거리 & 피로 변화 속도
     const distEl = document.getElementById("simPocketDist");
     distEl.textContent = evalRes.pocketBadge;
-    distEl.className = `sp-val mono-num ${evalRes.zoneClass}`;
+    distEl.className = `mono-num ${evalRes.zoneClass}`;
 
     const deltaEl = document.getElementById("simDeltaRate");
     if (state.routePhase === "idle") {
-      deltaEl.textContent = "대기 중 (0점/분)";
-      deltaEl.className = "sp-val mono-num text-slate";
+      deltaEl.textContent = "대기 (0점/분)";
+      deltaEl.className = "sim-dock-val mono-num text-slate";
     } else if (state.routePhase === "recovered") {
-      deltaEl.textContent = "회복 끝! (안전)";
-      deltaEl.className = "sp-val mono-num text-emerald";
+      deltaEl.textContent = "회복 끝 (안전)";
+      deltaEl.className = "sim-dock-val mono-num text-emerald";
     } else if (evalRes.rate > 2.2) {
-      deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 빠르게 쌓임`;
-      deltaEl.className = "sp-val mono-num text-rose";
+      deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 빠름`;
+      deltaEl.className = "sim-dock-val mono-num text-rose";
     } else if (evalRes.rate > 0.05) {
-      deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 조금씩 쌓임`;
-      deltaEl.className = "sp-val mono-num text-amber";
+      deltaEl.textContent = `+${evalRes.rate.toFixed(1)}점/분 ▲ 누적`;
+      deltaEl.className = "sim-dock-val mono-num text-amber";
     } else {
-      deltaEl.textContent = `${evalRes.rate.toFixed(1)}점/분 ▼ 시원하게 빠짐`;
-      deltaEl.className = "sp-val mono-num text-emerald";
+      deltaEl.textContent = `${evalRes.rate.toFixed(1)}점/분 ▼ 회복`;
+      deltaEl.className = "sim-dock-val mono-num text-emerald";
     }
 
     // 게이지 바
@@ -1352,25 +1358,25 @@
     scoreEl.style.color = scoreInt >= 80 ? "#DC2626" : scoreInt >= 50 ? "#B45309" : "#047857";
     document.getElementById("gaugeFill").style.width = `${clamp(state.simScore, 0, 100)}%`;
 
-    // 라이더 직관 컨디션 텔레메트리 (어려운 기호 없이 쉬운 말로, 원수치는 툴팁에 보관)
+    // 통합 3열 핵심 수치 (지금 공기 / 피로 변화 / 졸음·두통)
     const no2El = document.getElementById("teleNo2");
     const ratio = evalRes.ratioVsUrban || 1.0;
     no2El.title = `실측 이산화질소(NO₂) 농도: ${evalRes.localNo2.toFixed(4)} ppm`;
     if (state.routePhase === "recovered" || (state.routePhase === "escaping" && ratio < 1.15)) {
-      no2El.textContent = "상쾌·맑음 (환기)";
-      no2El.className = "tele-val text-emerald";
+      no2El.textContent = "상쾌·맑음";
+      no2El.className = "sim-dock-val text-emerald";
     } else if (ratio >= 2.0) {
       no2El.textContent = `매우 독함 (${ratio.toFixed(1)}배)`;
-      no2El.className = "tele-val text-rose";
+      no2El.className = "sim-dock-val text-rose";
     } else if (ratio >= 1.4) {
       no2El.textContent = `매캐함 (${ratio.toFixed(1)}배)`;
-      no2El.className = "tele-val text-amber";
+      no2El.className = "sim-dock-val text-amber";
     } else if (ratio >= 1.15) {
-      no2El.textContent = `조금 탁함 (${ratio.toFixed(1)}배)`;
-      no2El.className = "tele-val text-sky";
+      no2El.textContent = `탁함 (${ratio.toFixed(1)}배)`;
+      no2El.className = "sim-dock-val text-sky";
     } else {
       no2El.textContent = `동네 수준 (${ratio.toFixed(1)}배)`;
-      no2El.className = "tele-val text-emerald";
+      no2El.className = "sim-dock-val text-emerald";
     }
 
     const cohbVal = (0.7 + (state.simScore / 100) * 4.9).toFixed(1);
@@ -1378,40 +1384,19 @@
     cohbEl.title = `혈중 일산화탄소 헤모글로빈(CO-Hb) 추정: ${cohbVal}%`;
     if (state.routePhase === "recovered") {
       cohbEl.textContent = "전혀 없음";
-      cohbEl.className = "tele-val text-emerald";
+      cohbEl.className = "sim-dock-val text-emerald";
     } else if (scoreInt >= 80) {
       cohbEl.textContent = "졸음·사고 위험!";
-      cohbEl.className = "tele-val text-rose";
+      cohbEl.className = "sim-dock-val text-rose";
     } else if (scoreInt >= 55) {
       cohbEl.textContent = "두통 시작 주의";
-      cohbEl.className = "tele-val text-amber";
+      cohbEl.className = "sim-dock-val text-amber";
     } else if (scoreInt >= 25) {
       cohbEl.textContent = "약간 나른함";
-      cohbEl.className = "tele-val text-sky";
+      cohbEl.className = "sim-dock-val text-sky";
     } else {
       cohbEl.textContent = "전혀 없음";
-      cohbEl.className = "tele-val text-emerald";
-    }
-
-    const alertEl = document.getElementById("teleAlertLevel");
-    if (state.routePhase === "recovered" || (state.routePhase === "escaping" && scoreInt < 40)) {
-      alertEl.textContent = "완전 회복";
-      alertEl.className = "tele-val text-emerald";
-    } else if (state.routePhase === "escaping") {
-      alertEl.textContent = "숨 쉬기 편해짐";
-      alertEl.className = "tele-val text-sky";
-    } else if (scoreInt >= 80) {
-      alertEl.textContent = "순환 배차 필요!";
-      alertEl.className = "tele-val text-rose";
-    } else if (scoreInt >= 55) {
-      alertEl.textContent = "매연 피로 누적";
-      alertEl.className = "tele-val text-amber";
-    } else if (scoreInt >= 25) {
-      alertEl.textContent = "초기 답답함";
-      alertEl.className = "tele-val text-sky";
-    } else {
-      alertEl.textContent = "안전 운행";
-      alertEl.className = "tele-val text-emerald";
+      cohbEl.className = "sim-dock-val text-emerald";
     }
 
     // 바로 전환 버튼 활성화 여부
@@ -1528,7 +1513,8 @@
 
     document.getElementById("mapSubtitle").textContent =
       `${region.name} · 동네(${region.urban.stationName})는 맑지만 ${region.road.stationName} 큰길은 매연이 ${ratio}배 높아요`;
-    document.getElementById("simZoneName").textContent = region.road.stationName;
+    const zoneEl = document.getElementById("simZoneName");
+    if (zoneEl) zoneEl.textContent = region.road.stationName;
 
     populateHourSelect(region);
 

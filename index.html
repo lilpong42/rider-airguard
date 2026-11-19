@@ -120,8 +120,8 @@
             <p id="mapSubtitle" class="panel-sub">동네 공기와 큰길 매연 차이, 가까운 라이더 쉼터 위치를 한눈에 확인하세요</p>
           </div>
           <div class="map-controls">
-            <button type="button" id="btnMapClickDrive" class="btn-mini btn-mini-outline" title="활성화 후 지도를 클릭하면 오토바이가 해당 위치로 이동합니다">
-              📍 지도 클릭 주행: OFF
+            <button type="button" id="btnMapClickDrive" class="btn-mini btn-mini-active" title="지도를 클릭하면 오토바이가 해당 위치로 이동합니다">
+              📍 지도 클릭 주행: ON
             </button>
             <button type="button" id="btnTileToggle" class="btn-mini btn-mini-outline" title="지도 밝기 테마 전환">
               지도: 밝게
@@ -133,7 +133,7 @@
         </div>
 
         <div class="map-wrapper">
-          <div id="dispatchMap" class="map-light-tiles"></div>
+          <div id="dispatchMap" class="map-light-tiles map-click-active"></div>
 
           <!-- 순환 배차 발동 토스트 (깔끔한 화이트 글래스 카드) -->
           <div id="mapDispatchOverlay" class="map-dispatch-overlay hidden" role="alert">
@@ -143,47 +143,44 @@
           </div>
 
           <div class="map-legend">
-            <div class="legend-item"><span class="dot dot-green"></span> 동네 공기 (날씨앱 기준)</div>
-            <div class="legend-item"><span class="dot dot-red"></span> 큰길 매연 집중 구간 (마스크 통과)</div>
-            <div class="legend-item"><span class="dot dot-blue"></span> 라이더 쉼터 (-18점 바로 회복)</div>
-            <div class="legend-item"><span class="line-sample line-red"></span> 매연 많은 큰길 배달</div>
-            <div class="legend-item"><span class="line-sample line-cyan"></span> 지연 0분 맑은 동네 순환길</div>
+            <div class="legend-item"><span class="dot dot-green"></span> 동네 (날씨앱 기준)</div>
+            <div class="legend-item"><span class="dot dot-red"></span> 큰길 매연 (마스크 통과)</div>
+            <div class="legend-item"><span class="dot dot-blue"></span> 라이더 쉼터 (-18점)</div>
+            <div class="legend-item"><span class="line-sample line-red"></span> 큰길 배달</div>
+            <div class="legend-item"><span class="line-sample line-cyan"></span> 지연 0분 맑은 순환길</div>
           </div>
 
           <div class="map-hint-chip">
-            <strong>오토바이(🛵)를 직접 끌거나</strong> <strong>지도 클릭 주행</strong>을 켜서 빨간 매연 구간 안팎을 이동해 보세요
+            <strong>지도를 클릭하거나 🛵를 끌어</strong> 원하는 위치를 확인해 보세요
           </div>
         </div>
       </section>
 
-      <!-- C. 우측 패널: 라이더 매연 피로도 & 순환 배차 시뮬레이터 -->
+      <!-- C. 우측 패널: 라이더 매연 피로도 시뮬레이터 (군더더기 제거 · 1핵심 게이지 + 3요약 + 액션 우선) -->
       <aside class="studio-panel simulator-panel" aria-label="라이더 매연 피로도 및 순환 배차 시뮬레이터">
-        <div class="panel-header">
-          <div>
-            <h2>내 몸 매연 피로도 시뮬레이터</h2>
-            <p class="panel-sub">매연 구간을 지나면 피로도가 오르고, 쉼터·맑은 콜로 가면 내려가요</p>
-          </div>
-          <span id="simStepBadge" class="step-badge mono-num">대기 (0분)</span>
+        <div class="panel-header sim-panel-head">
+          <h2>내 몸 매연 피로도</h2>
+          <span id="simStepBadge" class="step-badge mono-num">대기 · 0분</span>
         </div>
 
-        <!-- 운행 시간대 & 배속 -->
+        <!-- 운행 시간 & 배속 -->
         <div class="sim-env-bar">
           <div class="env-group">
             <label for="simHourSelect" class="env-label">운행 시간</label>
             <select id="simHourSelect" class="env-select" aria-label="시뮬레이션 운행 시간대 선택"></select>
-            <span id="simHourContext" class="hour-context-pill mono-num">큰길 매연 심함 (106점)</span>
+            <span id="simHourContext" class="hour-context-pill mono-num">매우 심함 · 106점</span>
           </div>
           <div class="env-group">
             <span class="env-label">배속</span>
             <div class="seg-track speed-seg" role="group" aria-label="주행 시뮬레이션 배속">
-              <button type="button" class="seg-btn speed-btn active" data-speed="1">1×</button>
-              <button type="button" class="seg-btn speed-btn" data-speed="3">3×</button>
+              <button type="button" class="seg-btn speed-btn" data-speed="1">1×</button>
+              <button type="button" class="seg-btn speed-btn active" data-speed="3">3×</button>
               <button type="button" class="seg-btn speed-btn" data-speed="5">5×</button>
             </div>
           </div>
         </div>
 
-        <!-- 라이더 프로필 & 대화형 상태 헤드라인 -->
+        <!-- 라이더 위치 · 피로도 게이지 · 3대 핵심 수치 -->
         <div class="rider-summary-section">
           <div class="rider-top">
             <div class="rider-avatar" aria-hidden="true">🛵</div>
@@ -191,22 +188,20 @@
               <div class="rider-name">
                 <span>라이더 김성원</span>
                 <span id="riderPhasePill" class="rider-tag">대기 중</span>
-                <span id="esgScoreBadge" class="esg-pill mono-num">누적 0P · 탈출 0회</span>
+                <span id="esgScoreBadge" class="esg-pill mono-num">0P · 탈출 0회</span>
               </div>
               <div class="rider-meta">
-                현재 위치 <strong id="simSegmentName">신사역 사거리 (출발 대기)</strong> · <span id="simZoneName">강남대로</span>
+                📍 <strong id="simSegmentName">신사역 사거리</strong>
+                <span class="meta-sep">·</span>
+                <span id="simPocketDist" class="mono-num text-sky">1.8km · 큰길 진입</span>
               </div>
             </div>
           </div>
 
-          <div class="sim-headline-box">
-            <p id="simStatusHeadline" class="sim-headline-text">출발 대기 중이에요. 주행을 시작하면 큰길 매연 구간에서 피로도가 올라요.</p>
-          </div>
-
-          <!-- 누적 흡입 게이지 바 -->
+          <!-- 핵심 피로도 게이지 -->
           <div class="gauge-block">
             <div class="gauge-header">
-              <span>내 몸에 쌓인 매연 피로도</span>
+              <span>쌓인 매연 피로도</span>
               <strong id="gaugeScoreText" class="gauge-score mono-num">0점 / 100점</strong>
             </div>
             <div class="gauge-track">
@@ -217,77 +212,48 @@
             </div>
             <div class="gauge-scale">
               <span>0 상쾌</span>
-              <span>40 답답</span>
-              <span>80 맑은 콜 전환</span>
+              <span>80 자동 전환</span>
               <span>100 위험</span>
             </div>
+            <p id="simStatusHeadline" class="sim-status-line">주행을 시작하면 큰길 매연 구간에서 피로도가 올라가요.</p>
           </div>
 
-          <!-- 공간 위치 & 변화율 -->
-          <div class="spatial-status-bar">
-            <div class="spatial-cell">
-              <span class="sp-label">매연 구간까지 거리</span>
-              <strong id="simPocketDist" class="sp-val mono-num text-emerald">1.8km 밖 · 맑음</strong>
+          <!-- 통합 3열 핵심 수치 독 (기존 5개 박스 통합 정리) -->
+          <div class="sim-telemetry-dock" role="region" aria-label="실시간 주행 피로 요약">
+            <div class="sim-dock-cell">
+              <span class="sim-dock-label">지금 공기</span>
+              <strong id="teleNo2" class="sim-dock-val text-sky">조금 탁함 (1.3배)</strong>
             </div>
-            <div class="spatial-cell">
-              <span class="sp-label">피로도 변화 속도</span>
-              <strong id="simDeltaRate" class="sp-val mono-num text-slate">대기 중 (0점/분)</strong>
+            <div class="sim-dock-cell">
+              <span class="sim-dock-label">피로 변화</span>
+              <strong id="simDeltaRate" class="sim-dock-val mono-num text-slate">대기 (0점/분)</strong>
             </div>
-          </div>
-
-          <!-- 라이더 직관 컨디션 텔레메트리 (어려운 기호 없이 바로 이해) -->
-          <div class="telemetry-grid">
-            <div class="tele-box">
-              <span class="tele-label">지금 공기의 매연</span>
-              <strong id="teleNo2" class="tele-val">동네와 비슷 (1.0배)</strong>
+            <div class="sim-dock-cell">
+              <span class="sim-dock-label">졸음·두통</span>
+              <strong id="teleCohb" class="sim-dock-val text-emerald">전혀 없음</strong>
             </div>
-            <div class="tele-box">
-              <span class="tele-label">졸음·두통 위험</span>
-              <strong id="teleCohb" class="tele-val">전혀 없음</strong>
-            </div>
-            <div class="tele-box">
-              <span class="tele-label">지금 컨디션</span>
-              <strong id="teleAlertLevel" class="tele-val text-emerald">안전 운행</strong>
-            </div>
-          </div>
-
-          <!-- 실시간 SVG 추이 그래프 -->
-          <div class="trend-chart-wrap">
-            <div class="trend-header">
-              <span>시간별 피로도 변화</span>
-              <span class="trend-legend">
-                <span><i class="lg-dot lg-red"></i>매연 쌓임</span>
-                <span><i class="lg-dot lg-green"></i>공기 맑아짐</span>
-                <span><i class="lg-dot lg-blue"></i>쉼터 휴식(-18점)</span>
-              </span>
-            </div>
-            <svg id="simTrendSvg" class="trend-svg" viewBox="0 0 360 78" preserveAspectRatio="none" aria-label="실시간 매연 피로도 변화 그래프">
-              <line x1="0" y1="19.4" x2="360" y2="19.4" stroke="#D97706" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.7" />
-              <text x="4" y="15" fill="#92400E" font-size="9" font-weight="700">80점 전환</text>
-              <path id="simTrendArea" d="" fill="rgba(220, 38, 38, 0.12)" />
-              <path id="simTrendPath" d="" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
-              <g id="simTrendMarkers"></g>
-            </svg>
           </div>
         </div>
 
-        <!-- 조작 버튼 (Obsidian Primary CTA + Clean Outlines) -->
-        <div class="sim-actions-grid">
-          <button type="button" id="btnSimPlayPause" class="btn-ink">
+        <!-- 조작 버튼 (1핵심 시작 + 3보조 컨트롤) -->
+        <div class="sim-controls-stack">
+          <button type="button" id="btnSimPlayPause" class="btn-ink btn-cta-full">
             ▶ 실시간 주행 시작
           </button>
-          <button type="button" id="btnSimStep" class="btn-outline">
-            +30분 달려보기
-          </button>
-          <button type="button" id="btnManualEscape" class="btn-escape-action">
-            바로 맑은 콜 전환
-          </button>
-          <button type="button" id="btnSimReset" class="btn-ghost">
-            처음부터
-          </button>
+          <div class="sim-secondary-row">
+            <button type="button" id="btnSimStep" class="btn-outline">
+              +30분 달려보기
+            </button>
+            <button type="button" id="btnManualEscape" class="btn-escape-action">
+              바로 맑은 콜 전환
+            </button>
+            <button type="button" id="btnSimReset" class="btn-ghost">
+              처음부터
+            </button>
+          </div>
         </div>
 
-        <!-- 순환 배차 발동 카드 -->
+        <!-- 순환 배차 발동 카드 (전환 시 즉시 노출) -->
         <div id="dispatchApprovalCard" class="dispatch-card hidden" role="status">
           <div class="dispatch-header">
             <span id="dispatchPill" class="dispatch-pill">맑은 동네 콜 배차 중</span>
@@ -314,29 +280,48 @@
           </div>
         </div>
 
-        <!-- 실시간 구간 관제 로그 -->
-        <div class="section-divider">
-          <div class="briefing-title">
-            <span>실시간 주행 기록</span>
-            <span class="briefing-tag">위치 기반 추적</span>
+        <!-- 실시간 피로도 추이 그래프 (주행 시작 시 자동 표시) -->
+        <div id="trendChartWrap" class="trend-chart-wrap hidden">
+          <div class="trend-header">
+            <span>피로도 변화 추이</span>
+            <span class="trend-legend">
+              <span><i class="lg-dot lg-red"></i>매연</span>
+              <span><i class="lg-dot lg-green"></i>맑아짐</span>
+              <span><i class="lg-dot lg-blue"></i>쉼터(-18점)</span>
+            </span>
           </div>
-          <ul id="simEventLog" class="event-log-list">
-            <li><span class="ev-time">[대기]</span> 신사역 사거리 대기 중 — 주행 시작 시 매연 구간 통과에 따라 피로도가 바뀝니다.</li>
-          </ul>
+          <svg id="simTrendSvg" class="trend-svg" viewBox="0 0 360 66" preserveAspectRatio="none" aria-label="실시간 매연 피로도 변화 그래프">
+            <line x1="0" y1="16.8" x2="360" y2="16.8" stroke="#D97706" stroke-width="1.2" stroke-dasharray="4 3" opacity="0.7" />
+            <text x="4" y="13" fill="#92400E" font-size="9" font-weight="700">80점 전환</text>
+            <path id="simTrendArea" d="" fill="rgba(220, 38, 38, 0.12)" />
+            <path id="simTrendPath" d="" fill="none" stroke="#DC2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+            <g id="simTrendMarkers"></g>
+          </svg>
         </div>
 
-        <!-- 왜 필요한가요? 브리핑 -->
-        <div class="section-divider">
+        <!-- 간결한 주행 기록 -->
+        <div class="sim-log-wrap">
           <div class="briefing-title">
-            <span>왜 맑은 콜로 바꿔줄까요?</span>
-            <span class="briefing-tag">실측 데이터 근거</span>
+            <span>최근 주행 기록</span>
+            <span class="briefing-tag">실시간</span>
           </div>
-          <ul id="aiBriefingList" class="briefing-list">
-            <li>데이터 분석 결과를 불러오는 중입니다...</li>
+          <ul id="simEventLog" class="event-log-list">
+            <li><span class="ev-time">[대기]</span> 신사역 사거리 대기 중 — 주행 시작 시 매연 구간에 따라 피로도가 올라갑니다.</li>
           </ul>
         </div>
       </aside>
     </main>
+
+    <!-- 권역 맞춤 실측 분석 브리핑 (사이드바에서 분리해 한눈에 보기 쉽게 3열 배치) -->
+    <section class="studio-panel briefing-band" aria-label="권역별 순환 배차 분석 브리핑">
+      <div class="briefing-band-head">
+        <h2>왜 공기 맑은 동네 콜로 바꿔줄까요?</h2>
+        <span class="briefing-tag">선택 권역 실측 근거</span>
+      </div>
+      <ul id="aiBriefingList" class="briefing-grid">
+        <li>데이터 분석 결과를 불러오는 중입니다...</li>
+      </ul>
+    </section>
 
     <!-- D. R 통계 차트 2종 -->
     <section class="studio-panel charts-panel" aria-label="R 통계 시각화 차트">

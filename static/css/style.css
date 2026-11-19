@@ -608,7 +608,7 @@ code {
 .map-wrapper {
   position: relative;
   flex: 1;
-  min-height: 600px;
+  min-height: 530px;
   border-radius: 14px;
   overflow: hidden;
   border: 1px solid var(--border-hairline);
@@ -618,7 +618,7 @@ code {
 #dispatchMap {
   width: 100%;
   height: 100%;
-  min-height: 600px;
+  min-height: 530px;
   background: #EAECEF;
 }
 
@@ -841,6 +841,10 @@ code {
 /* =========================================================
    Right Panel: Toss-Clean Rider Simulator (Flat Hierarchy)
 ========================================================= */
+.sim-panel-head {
+  align-items: center;
+}
+
 .step-badge {
   background: var(--bg-track);
   border: 1px solid var(--border-hairline);
@@ -856,22 +860,22 @@ code {
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px 12px;
+  gap: 8px 10px;
   background: var(--bg-subtle);
   border: 1px solid var(--border-hairline);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 7px 11px;
 }
 
 .env-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   flex-wrap: wrap;
 }
 
 .env-label {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--ink-muted);
 }
@@ -881,16 +885,16 @@ code {
   color: var(--ink-primary);
   border: 1px solid var(--border-strong);
   border-radius: 8px;
-  padding: 5px 9px;
+  padding: 4px 8px;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .hour-context-pill {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 999px;
   background: var(--rose-soft);
   color: var(--rose-deep);
@@ -904,11 +908,11 @@ code {
 }
 
 .speed-seg .seg-btn {
-  padding: 4px 10px;
+  padding: 4px 9px;
   font-size: 12px;
 }
 
-/* Rider Identity & Conversational Headline */
+/* Rider Identity, Gauge & Unified 3-Metric Dock */
 .rider-summary-section {
   display: flex;
   flex-direction: column;
@@ -918,19 +922,19 @@ code {
 .rider-top {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
 }
 
 .rider-avatar {
-  width: 44px;
-  height: 44px;
+  width: 42px;
+  height: 42px;
   border-radius: 12px;
   background: var(--bg-subtle);
   border: 1px solid var(--border-hairline);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
+  font-size: 1.35rem;
   flex-shrink: 0;
 }
 
@@ -940,13 +944,13 @@ code {
 }
 
 .rider-name {
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--ink-primary);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 
 .rider-tag {
@@ -973,43 +977,32 @@ code {
 
 .esg-pill {
   margin-left: auto;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   background: var(--brand-gold-soft);
   border: 1px solid var(--brand-gold-border);
   color: var(--brand-gold-deep);
-  padding: 2px 9px;
+  padding: 2px 8px;
   border-radius: 999px;
 }
 
 .rider-meta {
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ink-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .rider-meta strong {
   color: var(--ink-primary);
-}
-
-/* Conversational Toss Status Headline */
-.sim-headline-box {
-  background: var(--bg-subtle);
-  border-left: 3.5px solid var(--brand-ink);
-  border-radius: 10px;
-  padding: 11px 14px;
-}
-
-.sim-headline-text {
-  margin: 0;
-  font-size: 14.5px;
   font-weight: 700;
-  color: var(--ink-primary);
-  letter-spacing: -0.02em;
-  line-height: 1.45;
+}
+
+.meta-sep {
+  margin: 0 3px;
+  color: var(--ink-subtle);
 }
 
 /* Gauge Block */
@@ -1017,6 +1010,7 @@ code {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding-top: 2px;
 }
 
 .gauge-header {
@@ -1024,20 +1018,20 @@ code {
   justify-content: space-between;
   align-items: baseline;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink-secondary);
 }
 
 .gauge-score {
-  font-size: 1.55rem;
+  font-size: 1.6rem;
   font-weight: 800;
   color: var(--emerald-deep);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
 }
 
 .gauge-track {
   position: relative;
-  height: 18px;
+  height: 16px;
   margin-top: 16px;
   background: #E2E8F0;
   border-radius: 999px;
@@ -1084,60 +1078,77 @@ code {
   color: var(--ink-subtle);
 }
 
-/* Clean Tonal Strips (Spatial + Telemetry) */
-.spatial-status-bar {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.sim-status-line {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+  line-height: 1.45;
 }
 
-.spatial-cell {
+/* Unified 3-Metric Telemetry Dock (1 Container Replacing 5 Sub-Boxes) */
+.sim-telemetry-dock {
   background: var(--bg-subtle);
   border: 1px solid var(--border-hairline);
-  border-radius: 11px;
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+}
+
+.sim-dock-cell {
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 
-.sp-label {
-  font-size: 12px;
+.sim-dock-cell + .sim-dock-cell {
+  border-left: 1px solid var(--border-hairline);
+}
+
+.sim-dock-label {
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--ink-muted);
 }
 
-.sp-val {
-  font-size: 13.5px;
+.sim-dock-val {
+  font-size: 13px;
   font-weight: 700;
+  color: var(--ink-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.telemetry-grid {
+/* Stacked Action Controls (1 Primary CTA + 3 Secondary Controls) */
+.sim-controls-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn-cta-full {
+  width: 100%;
+  padding: 13px 16px;
+  font-size: 14.5px;
+  text-align: center;
+}
+
+.sim-secondary-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.tele-box {
-  background: var(--bg-subtle);
-  border: 1px solid var(--border-hairline);
-  border-radius: 11px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.tele-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-muted);
-}
-
-.tele-val {
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--ink-primary);
+.sim-secondary-row .btn-outline,
+.sim-secondary-row .btn-escape-action,
+.sim-secondary-row .btn-ghost {
+  padding: 9px 10px;
+  font-size: 12.5px;
+  text-align: center;
 }
 
 /* Trend Sparkline Chart */
@@ -1145,34 +1156,34 @@ code {
   background: var(--bg-subtle);
   border: 1px solid var(--border-hairline);
   border-radius: 12px;
-  padding: 10px 12px 8px;
+  padding: 9px 12px 6px;
 }
 
 .trend-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink-secondary);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .trend-legend {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 11.5px;
+  gap: 8px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--ink-muted);
 }
 
 .lg-dot {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  margin-right: 4px;
+  margin-right: 3px;
 }
 .lg-red { background: #DC2626; }
 .lg-green { background: #059669; }
@@ -1180,24 +1191,17 @@ code {
 
 .trend-svg {
   width: 100%;
-  height: 82px;
+  height: 62px;
   display: block;
 }
 
-/* Action buttons */
-.sim-actions-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-/* Dispatch Approval Card (Toss Clean Card — Not Dark Green Blob) */
+/* Dispatch Approval Card (Toss Clean Card) */
 .dispatch-card {
   background: #F4FBF8;
   border: 1px solid var(--emerald-border);
   border-left: 4px solid var(--emerald);
-  border-radius: 14px;
-  padding: 14px 16px;
+  border-radius: 13px;
+  padding: 13px 15px;
   animation: popIn 0.25s ease-out;
 }
 
@@ -1210,7 +1214,7 @@ code {
   border: 1px solid var(--rose-border);
   padding: 2px 9px;
   border-radius: 999px;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .dispatch-pill.pill-recovered {
@@ -1221,26 +1225,26 @@ code {
 
 .dispatch-header h3 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 14px;
   font-weight: 800;
   color: var(--ink-primary);
-  line-height: 1.42;
+  line-height: 1.4;
 }
 
 .dispatch-body {
-  margin-top: 10px;
+  margin-top: 9px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
 }
 
 .dispatch-row {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
+  font-size: 12.5px;
   border-bottom: 1px solid rgba(5, 150, 105, 0.12);
-  padding-bottom: 5px;
+  padding-bottom: 4px;
 }
 
 .d-key {
@@ -1263,33 +1267,34 @@ code {
 }
 
 .reward-chip {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   background: #FFFFFF;
   border: 1px solid var(--brand-gold-border);
   color: var(--brand-gold-deep);
-  padding: 4px 9px;
+  padding: 3px 8px;
   border-radius: 7px;
 }
 
-/* Section Divider Inside Panel (Avoid Over-Nested Card Soup) */
-.section-divider {
+/* Compact Event Log inside Simulator */
+.sim-log-wrap {
   border-top: 1px solid var(--border-hairline);
-  padding-top: 14px;
+  padding-top: 12px;
+  margin-top: auto;
 }
 
 .briefing-title {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 700;
   color: var(--ink-primary);
-  margin-bottom: 8px;
+  margin-bottom: 7px;
 }
 
 .briefing-tag {
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--ink-muted);
   background: var(--bg-subtle);
@@ -1300,59 +1305,80 @@ code {
 
 .event-log-list {
   margin: 0;
-  padding: 10px 12px;
+  padding: 9px 11px;
   background: var(--bg-subtle);
   border: 1px solid var(--border-hairline);
   border-radius: 11px;
   list-style: none;
-  max-height: 106px;
+  max-height: 84px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 12.5px;
+  gap: 4px;
+  font-size: 12px;
   color: var(--ink-secondary);
 }
 
 .event-log-list li {
-  line-height: 1.45;
+  line-height: 1.42;
 }
 
 .ev-time {
   font-family: "JetBrains Mono", "Pretendard", monospace;
   color: var(--ink-primary);
   font-weight: 700;
-  margin-right: 5px;
+  margin-right: 4px;
 }
 
 .ev-danger { color: var(--rose-deep); font-weight: 600; }
 .ev-escape { color: var(--emerald-deep); font-weight: 600; }
 .ev-shelter { color: var(--sky-deep); font-weight: 600; }
 
-.briefing-list {
+/* Full-Width 3-Column Region Briefing Band */
+.briefing-band {
+  gap: 12px;
+  padding: 18px 22px;
+}
+
+.briefing-band-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.briefing-band-head h2 {
+  margin: 0;
+  font-size: 1.04rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--ink-primary);
+}
+
+.briefing-grid {
   margin: 0;
   padding: 0;
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
   font-size: 13px;
   color: var(--ink-secondary);
   line-height: 1.55;
 }
 
-.briefing-list li {
+.briefing-grid li {
   background: var(--bg-subtle);
   border: 1px solid var(--border-hairline);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 12px;
+  padding: 12px 14px;
 }
 
 .briefing-lead {
   display: block;
   font-weight: 700;
   color: var(--ink-primary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 /* =========================================================
@@ -1658,7 +1684,8 @@ code {
 @media (max-width: 1180px) {
   .hero-overview-grid { grid-template-columns: 1fr; gap: 14px; }
   .main-grid { grid-template-columns: 1fr; }
-  .map-wrapper, #dispatchMap { min-height: 460px; }
+  .map-wrapper, #dispatchMap { min-height: 440px; }
+  .briefing-grid { grid-template-columns: 1fr; }
   .charts-grid { grid-template-columns: 1fr; }
   .bm-strip { grid-template-columns: 1fr; }
 }
@@ -1669,8 +1696,9 @@ code {
   .hero-summary h1 { font-size: 1.24rem; }
   .rider-kpi-dock { grid-template-columns: 1fr; }
   .dock-metric + .dock-metric { border-left: none; border-top: 1px solid var(--border-hairline); }
-  .sim-actions-grid { grid-template-columns: 1fr; }
-  .spatial-status-bar { grid-template-columns: 1fr; }
-  .telemetry-grid { grid-template-columns: 1fr; }
+  .sim-telemetry-dock { grid-template-columns: 1fr; }
+  .sim-dock-cell { flex-direction: row; justify-content: space-between; align-items: center; padding: 9px 13px; }
+  .sim-dock-cell + .sim-dock-cell { border-left: none; border-top: 1px solid var(--border-hairline); }
+  .sim-secondary-row { grid-template-columns: 1fr; }
   .map-hint-chip { display: none; }
 }
