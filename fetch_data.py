@@ -14,7 +14,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -25,8 +26,12 @@ import requests
 BASE_DIR = Path(__file__).resolve().parent
 CSV_PATH = BASE_DIR / "data.csv"
 META_PATH = BASE_DIR / "data_meta.json"
+KST = timezone(timedelta(hours=9))
 
-SERVICE_KEY = "e9d4a95c536a8636de2d9e0187ace7b7b6e5b33cd0aac623caac083c56b55347"
+SERVICE_KEY = (
+    os.environ.get("AIRKOREA_API_KEY", "").strip()
+    or "e9d4a95c536a8636de2d9e0187ace7b7b6e5b33cd0aac623caac083c56b55347"
+)
 API1_URL = (
     "http://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getCtprvnRltmMesureDnsty"
     f"?serviceKey={SERVICE_KEY}&returnType=json&numOfRows=100&pageNo=1"
@@ -385,7 +390,7 @@ def fetch_and_save_data(force_fallback: bool = False, timeout: float = 5.0) -> d
 
     meta_info.update(
         {
-            "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "fetched_at": datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S KST"),
             "total_rows": int(len(df)),
             "station_count": int(df["stationName"].nunique()),
             "urban_rows": int((df["mangName"] == "도시대기").sum()),

@@ -45,16 +45,29 @@ COLOR_GOLD_DEEP = "#92400E"  # 한냥 Deep Brass
 
 
 def setup_korean_font() -> None:
-    """시스템에 설치된 Noto Sans CJK KR 폰트를 matplotlib에 등록한다."""
-    font_paths = [
+    """시스템에 설치된 한글 폰트(Noto Sans CJK / NanumGothic)를 자동 탐색해 등록한다."""
+    candidate_paths = [
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/nanum/NanumGothic.ttf",
+        "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf",
     ]
-    for fp in font_paths:
+    detected_families: list[str] = []
+    for fp in candidate_paths:
         if Path(fp).exists():
             fm.fontManager.addfont(fp)
+            try:
+                fam = fm.FontProperties(fname=fp).get_name()
+                if fam and fam not in detected_families:
+                    detected_families.append(fam)
+            except Exception:
+                pass
 
-    plt.rcParams["font.family"] = ["Noto Sans CJK KR", "DejaVu Sans"]
+    if detected_families:
+        plt.rcParams["font.family"] = detected_families + ["DejaVu Sans"]
+    else:
+        plt.rcParams["font.family"] = ["Noto Sans CJK KR", "DejaVu Sans"]
     plt.rcParams["axes.unicode_minus"] = False
 
 

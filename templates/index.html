@@ -427,6 +427,22 @@
           </tbody>
         </table>
       </div>
+
+      <div class="table-pagination" aria-label="데이터 테이블 페이지 이동">
+        <div class="page-left">
+          <span id="csvPageInfo" class="page-info mono-num">1–15 / 총 0행</span>
+          <select id="csvPageSize" class="page-size-select" aria-label="페이지당 행 수">
+            <option value="15" selected>15행씩 보기</option>
+            <option value="30">30행씩 보기</option>
+            <option value="ALL">전체 보기</option>
+          </select>
+        </div>
+        <div class="page-controls">
+          <button type="button" id="btnCsvPrev" class="btn-mini" disabled>← 이전</button>
+          <span id="csvPageBadge" class="page-badge mono-num">1 / 1</span>
+          <button type="button" id="btnCsvNext" class="btn-mini" disabled>다음 →</button>
+        </div>
+      </div>
     </section>
 
     <!-- 비즈니스 수익 모델 (B2B / B2G) -->

@@ -50,6 +50,8 @@
     escapeTrailPoly: null,
     targetMarker: null,
     rCodeCached: null,
+    csvPage: 1,
+    csvPageSize: 15,
   };
 
   // --- 공간 거리 및 폴리라인 유틸리티 ---
@@ -1726,8 +1728,9 @@
     document.getElementById("kpiRowsCount").textContent = `${meta.total_rows || 0} 행`;
     document.getElementById("kpiImputeBadge").textContent = `결측 ${meta.imputed_cell_count || 0}건 정제`;
     document.getElementById("kpiMetaFoot").textContent =
-      `서울 ${meta.station_count || 40}개 측정소 · 망구분 평균 Imputation 완료 (기준 ${meta.latest_data_time || "-"})`;
+      `서울 ${meta.station_count || 40}개 측정소 · 기준 ${meta.latest_data_time || "-"} · 자동 갱신 지원`;
 
+    state.csvPage = 1;
     renderCsvTable();
   }
 
@@ -1743,17 +1746,42 @@
       return true;
     });
 
+    const totalFiltered = filtered.length;
+    const pageSize = state.csvPageSize === "ALL" ? Math.max(totalFiltered, 1) : Number(state.csvPageSize) || 15;
+    const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+    state.csvPage = clamp(state.csvPage, 1, totalPages);
+
+    const startIdx = (state.csvPage - 1) * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, totalFiltered);
+    const pageRows = filtered.slice(startIdx, endIdx);
+
     document.getElementById("tableSummary").textContent =
-      `전체 ${rows.length}행 중 ${filtered.length}행 표시 중 (결측치 '-' 자동 평균 정제 완료)`;
+      `전체 ${rows.length}행 중 ${totalFiltered}행 일치 (결측치 '-' 자동 평균 정제 완료)`;
+
+    const pageInfoEl = document.getElementById("csvPageInfo");
+    const pageBadgeEl = document.getElementById("csvPageBadge");
+    const prevBtn = document.getElementById("btnCsvPrev");
+    const nextBtn = document.getElementById("btnCsvNext");
+    if (pageInfoEl) {
+      pageInfoEl.textContent =
+        totalFiltered === 0
+          ? "0 / 총 0행"
+          : `${startIdx + 1}–${endIdx} / 총 ${totalFiltered}행`;
+    }
+    if (pageBadgeEl) {
+      pageBadgeEl.textContent = `${state.csvPage} / ${totalPages}`;
+    }
+    if (prevBtn) prevBtn.disabled = state.csvPage <= 1;
+    if (nextBtn) nextBtn.disabled = state.csvPage >= totalPages;
 
     const tbody = document.getElementById("csvTableBody");
-    if (filtered.length === 0) {
+    if (pageRows.length === 0) {
       tbody.innerHTML = `<tr><td colspan="9" class="empty-cell">검색 조건과 일치하는 측정 데이터가 없습니다.</td></tr>`;
       return;
     }
 
     const fragment = document.createDocumentFragment();
-    filtered.forEach((r) => {
+    pageRows.forEach((r) => {
       const tr = document.createElement("tr");
       const isRoad = r.mangName === "도로변대기";
       tr.innerHTML = `
@@ -1972,8 +2000,45 @@
     document.getElementById("btnRefreshLive").addEventListener("click", () => refreshData("live"));
     document.getElementById("btnTestFallback").addEventListener("click", () => refreshData("fallback"));
 
-    document.getElementById("csvSearchInput").addEventListener("input", renderCsvTable);
-    document.getElementById("csvMangFilter").addEventListener("change", renderCsvTable);
+    document.getElementById("csvSearchInput").addEventListener("input", () => {
+      state.csvPage = 1;
+      renderCsvTable();
+    });
+    document.getElementById("csvMangFilter").addEventListener("change", () => {
+      state.csvPage = 1;
+      renderCsvTable();
+    });
+
+    const csvPageSizeSel = document.getElementById("csvPageSize");
+    if (csvPageSizeSel) {
+      csvPageSizeSel.addEventListener("change", (e) => {
+        state.csvPageSize = e.target.value === "ALL" ? "ALL" : Number(e.target.value) || 15;
+        state.csvPage = 1;
+        renderCsvTable();
+      });
+    }
+    const scrollTableTop = () => {
+      const wrap = document.querySelector(".table-scroll");
+      if (wrap) wrap.scrollTop = 0;
+    };
+    const btnCsvPrev = document.getElementById("btnCsvPrev");
+    if (btnCsvPrev) {
+      btnCsvPrev.addEventListener("click", () => {
+        if (state.csvPage > 1) {
+          state.csvPage -= 1;
+          renderCsvTable();
+          scrollTableTop();
+        }
+      });
+    }
+    const btnCsvNext = document.getElementById("btnCsvNext");
+    if (btnCsvNext) {
+      btnCsvNext.addEventListener("click", () => {
+        state.csvPage += 1;
+        renderCsvTable();
+        scrollTableTop();
+      });
+    }
 
     // R 코드 모달
     const rModal = document.getElementById("rCodeModal");
