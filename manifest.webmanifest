@@ -1,0 +1,26 @@
+{
+  "name": "Rider-AirGuard — 한냥 Safety AI",
+  "short_name": "AirGuard",
+  "description": "큰길 매연을 피해 배달 지연 0분으로 맑은 동네 콜로 바꿔주는 라이더 호흡기 보호 AI",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F2F4F8",
+  "theme_color": "#FFFFFF",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

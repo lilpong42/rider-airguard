@@ -551,6 +551,16 @@ def api_download_r():
     return send_file(R_SCRIPT_PATH, as_attachment=True, download_name="analysis.R", mimetype="text/plain")
 
 
+@app.route("/manifest.webmanifest")
+def pwa_manifest():
+    return send_file(BASE_DIR / "manifest.webmanifest", mimetype="application/manifest+json")
+
+
+@app.route("/sw.js")
+def pwa_sw():
+    return send_file(BASE_DIR / "sw.js", mimetype="application/javascript")
+
+
 if __name__ == "__main__":
     ensure_data_ready()
     port = int(os.environ.get("PORT", 5000))

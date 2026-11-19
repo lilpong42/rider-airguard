@@ -521,13 +521,27 @@ code {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
+  justify-content: space-between;
+  gap: 10px 14px;
   padding: 10px 14px;
   background: var(--bg-subtle);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-sub);
   font-size: 12.5px;
   color: var(--ink-secondary);
+}
+
+.proof-info-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.proof-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .proof-pill {
@@ -599,6 +613,10 @@ code {
 /* =========================================================
    Left Panel: Interactive Leaflet Map (Clean Light Default)
 ========================================================= */
+.map-panel {
+  align-self: start;
+}
+
 .map-controls {
   display: flex;
   flex-wrap: wrap;
@@ -607,8 +625,7 @@ code {
 
 .map-wrapper {
   position: relative;
-  flex: 1;
-  min-height: 530px;
+  height: 540px;
   border-radius: 14px;
   overflow: hidden;
   border: 1px solid var(--border-hairline);
@@ -618,7 +635,6 @@ code {
 #dispatchMap {
   width: 100%;
   height: 100%;
-  min-height: 530px;
   background: #EAECEF;
 }
 
@@ -674,6 +690,35 @@ code {
   margin-top: 2px;
   font-size: 12.5px;
   color: var(--ink-secondary);
+}
+
+.overlay-actions {
+  margin-top: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn-mini-emerald {
+  background: var(--emerald);
+  border-color: var(--emerald);
+  color: #FFFFFF;
+}
+
+.btn-mini-emerald:hover {
+  background: var(--emerald-deep);
+  border-color: var(--emerald-deep);
+  color: #FFFFFF;
+}
+
+.map-dispatch-overlay.overlay-offer {
+  border-left-color: var(--brand-gold);
+}
+
+.map-dispatch-overlay.overlay-offer .overlay-badge {
+  background: var(--brand-gold-soft);
+  color: var(--brand-gold-deep);
+  border-color: var(--brand-gold-border);
 }
 
 .map-legend {
@@ -1195,6 +1240,95 @@ code {
   display: block;
 }
 
+/* Incoming Clean-Call Offer Card (Accept / Decline Comparison) */
+.call-offer-card {
+  background: #FFFDF5;
+  border: 1.5px solid var(--brand-gold-border);
+  border-left: 4px solid var(--brand-gold);
+  border-radius: 14px;
+  padding: 14px 15px;
+  box-shadow: 0 8px 22px -10px rgba(180, 83, 9, 0.25);
+  animation: popIn 0.22s ease-out;
+}
+
+.call-offer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.offer-badge {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 800;
+  background: var(--brand-gold-soft);
+  color: var(--brand-gold-deep);
+  border: 1px solid var(--brand-gold-border);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+
+.call-offer-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ink-primary);
+  letter-spacing: -0.025em;
+  line-height: 1.35;
+}
+
+.call-offer-meta {
+  margin: 4px 0 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.call-offer-actions {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 8px;
+}
+
+.btn-offer-accept {
+  background: var(--emerald);
+  color: #FFFFFF;
+  border: 1px solid var(--emerald);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.btn-offer-accept:hover {
+  background: var(--emerald-deep);
+}
+
+.btn-offer-accept:active {
+  transform: scale(0.985);
+}
+
+.btn-offer-decline {
+  background: #FFFFFF;
+  color: var(--rose-deep);
+  border: 1px solid var(--rose-border);
+  border-radius: 10px;
+  padding: 10px 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-offer-decline:hover {
+  background: var(--rose-soft);
+  border-color: #FCA5A5;
+}
+
 /* Dispatch Approval Card (Toss Clean Card) */
 .dispatch-card {
   background: #F4FBF8;
@@ -1678,6 +1812,11 @@ code {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* Mobile Sticky Bottom Action Bar (Hidden on Desktop) */
+.mobile-sticky-bar {
+  display: none;
+}
+
 /* =========================================================
    Responsive Breakpoints
 ========================================================= */
@@ -1691,14 +1830,84 @@ code {
 }
 
 @media (max-width: 680px) {
-  .page-shell { padding: 14px 16px 32px; }
-  .topbar-inner { padding: 10px 16px; }
-  .hero-summary h1 { font-size: 1.24rem; }
-  .rider-kpi-dock { grid-template-columns: 1fr; }
-  .dock-metric + .dock-metric { border-left: none; border-top: 1px solid var(--border-hairline); }
+  .page-shell { padding: 12px 14px 92px; gap: 12px; }
+  .topbar-inner { padding: 8px 14px; gap: 8px 10px; }
+  .brand-sub { display: none; }
+  .brand-emblem { width: 32px; height: 32px; }
+  .brand-emblem svg { width: 32px; height: 32px; }
+  .brand-wordmark { font-size: 1rem; }
+  .topbar-right { width: 100%; justify-content: space-between; gap: 6px; }
+  .seg-btn { padding: 5px 10px; font-size: 12.5px; }
+  .hero-summary h1 { font-size: 1.18rem; }
+  .hero-desc { font-size: 12.5px; }
+  .rider-kpi-dock { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dock-metric { padding: 11px 9px; gap: 4px; }
+  .dock-label { font-size: 11px; }
+  .dock-value-row { gap: 4px; }
+  .dock-value-row strong { font-size: 1.02rem; }
+  .dock-foot { font-size: 10.5px; }
+  .pill { font-size: 10px; padding: 2px 6px; }
+  .map-wrapper, #dispatchMap { min-height: 360px; }
   .sim-telemetry-dock { grid-template-columns: 1fr; }
   .sim-dock-cell { flex-direction: row; justify-content: space-between; align-items: center; padding: 9px 13px; }
   .sim-dock-cell + .sim-dock-cell { border-left: none; border-top: 1px solid var(--border-hairline); }
   .sim-secondary-row { grid-template-columns: 1fr; }
+  .call-offer-actions { grid-template-columns: 1fr; }
   .map-hint-chip { display: none; }
+
+  .mobile-sticky-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 950;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--border-strong);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+  }
+
+  .mobile-bar-status {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .mobile-bar-status strong {
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.15;
+  }
+
+  .mobile-bar-status span {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobile-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .mobile-bar-primary {
+    padding: 9px 14px;
+    font-size: 13px;
+  }
+
+  .mobile-bar-escape {
+    padding: 9px 11px;
+    font-size: 12.5px;
+  }
 }

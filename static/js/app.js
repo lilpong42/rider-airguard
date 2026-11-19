@@ -463,9 +463,81 @@
     state.lastHistoryMin = min;
   }
 
-  // --- 순환 배차 발동 (자동 80점 돌파 또는 수동 전환) ---
+  // --- 맑은 동네 콜 제안 (수락 / 큰길 계속 달리기 비교 시연) ---
+  function clearCallOffer() {
+    if (state.callOfferTimer) {
+      clearInterval(state.callOfferTimer);
+      state.callOfferTimer = null;
+    }
+    state.callOfferActive = false;
+    state.callOfferCountdown = 0;
+  }
+
+  function triggerCallOffer(region, autoCountdown) {
+    if (state.callOfferActive || state.routePhase !== "danger") return;
+    const wasRunning = state.simRunning;
+    stopContinuousLoop();
+    state.callOfferActive = true;
+    state.callOfferResumeDriving = wasRunning || autoCountdown;
+    state.callOfferCountdown = autoCountdown ? 4 : 0;
+
+    playEmergencyChime();
+    addEventLog(
+      state.simMinutes,
+      `🔔 80점 돌파! 맑은 동네 콜 도착 (${Math.round(state.simScore)}점) — 수락/계속 주행 선택`,
+      "ev-danger"
+    );
+
+    if (autoCountdown) {
+      if (state.callOfferTimer) clearInterval(state.callOfferTimer);
+      state.callOfferTimer = setInterval(() => {
+        if (!state.callOfferActive) {
+          clearCallOffer();
+          return;
+        }
+        state.callOfferCountdown -= 1;
+        if (state.callOfferCountdown <= 0) {
+          acceptCallOffer();
+        } else {
+          updateAllSimulatorVisuals(false);
+        }
+      }, 1000);
+    }
+
+    updateAllSimulatorVisuals();
+  }
+
+  function acceptCallOffer() {
+    if (!state.dashboard) return;
+    const region = state.dashboard.regions[state.activeRegionKey];
+    const shouldResume = state.callOfferResumeDriving;
+    clearCallOffer();
+    activateCircularEscape(region, false);
+    if (shouldResume && !state.simRunning) {
+      startContinuousLoop();
+    }
+    updateAllSimulatorVisuals();
+  }
+
+  function declineCallOffer() {
+    if (!state.dashboard) return;
+    clearCallOffer();
+    state.callDeclinedThisRound = true;
+    addEventLog(
+      state.simMinutes,
+      "⚠️ 큰길 계속 주행 선택 — 매연 피로도가 100점 위험 구간까지 계속 쌓입니다!",
+      "ev-danger"
+    );
+    if (!state.simRunning) {
+      startContinuousLoop();
+    }
+    updateAllSimulatorVisuals();
+  }
+
+  // --- 순환 배차 발동 (수락 또는 수동 전환) ---
   function activateCircularEscape(region, isManual) {
     if (state.routePhase === "escaping" || state.routePhase === "recovered") return;
+    clearCallOffer();
 
     state.routePhase = "escaping";
     state.manualPositionHold = false;
@@ -507,11 +579,11 @@
     state.escapeTrailPoints = [startPt];
 
     if (!isManual) {
-      playEmergencyChime();
+      playRecoveryChime();
       addEventLog(
         state.simMinutes,
-        `80점 넘어서 맑은 동네 콜로 자동 전환! (${Math.round(state.simScore)}점 · 배달 지연 0분)`,
-        "ev-danger"
+        `✅ 맑은 동네 콜 수락! (${Math.round(state.simScore)}점 · 배달 지연 0분)`,
+        "ev-escape"
       );
     } else {
       playRecoveryChime();
@@ -671,12 +743,15 @@
         pushHistorySample(state.simMinutes, state.simScore, state.routePhase, null);
       }
 
-      // 3. 임계치 80점 돌파 -> 자동 순환 배차 발동!
-      if (state.routePhase === "danger" && state.simScore >= 80) {
-        activateCircularEscape(region, false);
-        if (stopOnEscapeTrigger) {
-          break;
-        }
+      // 3. 임계치 80점 돌파 -> 맑은 동네 콜 도착 제안 (수락 / 계속 달리기 비교 선택)
+      if (
+        state.routePhase === "danger" &&
+        state.simScore >= 80 &&
+        !state.callDeclinedThisRound &&
+        !state.callOfferActive
+      ) {
+        triggerCallOffer(region, !stopOnEscapeTrigger);
+        return;
       }
     }
 
@@ -715,7 +790,9 @@
     const btn = document.getElementById("btnSimPlayPause");
     if (!btn) return;
     btn.classList.toggle("is-running", state.simRunning);
-    if (state.simRunning) {
+    if (state.callOfferActive) {
+      btn.textContent = "✅ 맑은 콜 수락하기";
+    } else if (state.simRunning) {
       btn.textContent = "⏸ 잠깐 멈추기";
     } else if (state.routePhase === "recovered") {
       btn.textContent = "🛵 다음 배달 시작하기";
@@ -728,6 +805,9 @@
 
   function resetRouteForNextRound(region, fullReset = true) {
     stopContinuousLoop();
+    clearCallOffer();
+    state.callDeclinedThisRound = false;
+    state.callOfferResumeDriving = false;
     state.routePhase = "idle";
     state.manualPositionHold = false;
     state.customTarget = null;
@@ -1405,12 +1485,52 @@
       manualBtn.disabled = state.routePhase === "escaping" || state.routePhase === "recovered";
     }
 
-    // 순환 배차 승인 & 회복 카드
+    // 맑은 동네 콜 제안 카드 & 순환 배차 승인/회복 카드 & 지도 오버레이
+    const offerCard = document.getElementById("callOfferCard");
     const approvalCard = document.getElementById("dispatchApprovalCard");
     const mapOverlay = document.getElementById("mapDispatchOverlay");
+    const mapOverlayActions = document.getElementById("mapOverlayActions");
     const call = region.escape_call;
 
-    if (state.routePhase === "escaping" || state.routePhase === "recovered") {
+    if (state.callOfferActive) {
+      if (offerCard) {
+        const offerBadge = document.getElementById("callOfferBadge");
+        const offerTitle = document.getElementById("callOfferTitle");
+        const offerMeta = document.getElementById("callOfferMeta");
+        if (offerBadge) {
+          offerBadge.textContent =
+            state.callOfferCountdown > 0
+              ? `🔔 맑은 동네 콜 도착 · ${state.callOfferCountdown}초 후 자동 수락`
+              : "🔔 맑은 동네 콜 도착 · 선택 대기";
+        }
+        if (offerTitle) {
+          offerTitle.textContent = `${scoreInt}점 돌파! 맑은 동네 콜로 바꿀까요?`;
+        }
+        if (offerMeta) {
+          offerMeta.textContent = `${call.order_title} · 배달 지연 ${call.delay_minutes}분 · ${call.green_points}`;
+        }
+        offerCard.classList.remove("hidden");
+      }
+      if (approvalCard) approvalCard.classList.add("hidden");
+
+      if (mapOverlay) {
+        mapOverlay.classList.remove("hidden");
+        mapOverlay.classList.add("overlay-offer");
+        document.getElementById("mapOverlayBadge").textContent =
+          state.callOfferCountdown > 0
+            ? `🔔 맑은 콜 도착 (${state.callOfferCountdown}초)`
+            : "🔔 맑은 동네 콜 도착";
+        document.getElementById("mapOverlayTitle").textContent =
+          `[${region.name}] ${scoreInt}점 위험! 맑은 동네 콜로 전환할까요?`;
+        document.getElementById("mapOverlayDesc").textContent =
+          `${call.order_title} · 지연 0분 · ${call.green_points}`;
+      }
+      if (mapOverlayActions) mapOverlayActions.classList.remove("hidden");
+    } else if (state.routePhase === "escaping" || state.routePhase === "recovered") {
+      if (offerCard) offerCard.classList.add("hidden");
+      if (mapOverlayActions) mapOverlayActions.classList.add("hidden");
+      if (mapOverlay) mapOverlay.classList.remove("overlay-offer");
+
       const isRec = state.routePhase === "recovered";
       const pill = document.getElementById("dispatchPill");
       pill.textContent = isRec
@@ -1442,8 +1562,55 @@
       approvalCard.classList.remove("hidden");
       mapOverlay.classList.remove("hidden");
     } else {
+      if (offerCard) offerCard.classList.add("hidden");
+      if (mapOverlayActions) mapOverlayActions.classList.add("hidden");
+      if (mapOverlay) {
+        mapOverlay.classList.remove("overlay-offer");
+        mapOverlay.classList.add("hidden");
+      }
       approvalCard.classList.add("hidden");
-      mapOverlay.classList.add("hidden");
+    }
+
+    // 모바일 하단 원터치 고정 바 동기화
+    const mobileScoreEl = document.getElementById("mobileBarScore");
+    const mobileLabelEl = document.getElementById("mobileBarLabel");
+    const mobilePrimaryBtn = document.getElementById("btnMobilePrimary");
+    const mobileEscapeBtn = document.getElementById("btnMobileEscape");
+    if (mobileScoreEl) {
+      mobileScoreEl.textContent = `${scoreInt}점`;
+      mobileScoreEl.className = `mobile-bar-score mono-num ${
+        scoreInt >= 80 ? "text-rose" : scoreInt >= 50 ? "text-amber" : "text-emerald"
+      }`;
+    }
+    if (mobileLabelEl) {
+      if (state.callOfferActive) {
+        mobileLabelEl.textContent = "맑은 콜 도착!";
+      } else if (state.routePhase === "escaping") {
+        mobileLabelEl.textContent = "맑은 콜 이동 중";
+      } else if (state.routePhase === "recovered") {
+        mobileLabelEl.textContent = "회복 완료";
+      } else if (state.routePhase === "danger") {
+        mobileLabelEl.textContent = scoreInt >= 80 ? "위험 주행 중!" : "큰길 주행 중";
+      } else {
+        mobileLabelEl.textContent = "주행 대기";
+      }
+    }
+    if (mobilePrimaryBtn) {
+      mobilePrimaryBtn.classList.toggle("is-running", state.simRunning);
+      if (state.callOfferActive) {
+        mobilePrimaryBtn.textContent = "✅ 콜 수락";
+      } else if (state.simRunning) {
+        mobilePrimaryBtn.textContent = "⏸ 멈추기";
+      } else if (state.routePhase === "recovered") {
+        mobilePrimaryBtn.textContent = "🛵 다음 배달";
+      } else if (state.routePhase === "idle") {
+        mobilePrimaryBtn.textContent = "▶ 주행 시작";
+      } else {
+        mobilePrimaryBtn.textContent = "▶ 이어하기";
+      }
+    }
+    if (mobileEscapeBtn) {
+      mobileEscapeBtn.disabled = state.routePhase === "escaping" || state.routePhase === "recovered";
     }
 
     updatePlayButtonUI();
@@ -1707,8 +1874,12 @@
       });
     });
 
-    // 실시간 연속 주행 시작/일시정지
+    // 실시간 연속 주행 시작/일시정지 (콜 도착 상태에서는 수락)
     document.getElementById("btnSimPlayPause").addEventListener("click", () => {
+      if (state.callOfferActive) {
+        acceptCallOffer();
+        return;
+      }
       if (state.simRunning) {
         stopContinuousLoop();
       } else {
@@ -1716,9 +1887,24 @@
       }
     });
 
-    // +30분 구간 주행 (구간별 물리 적분 + 80점 돌파 시점에서 잠시 정지해 알림 확인 가능)
+    // +30분 구간 주행 (콜 도착 상태에서 누르면 수락 후 바로 회복 구간 진행)
     document.getElementById("btnSimStep").addEventListener("click", () => {
+      if (state.callOfferActive) {
+        acceptCallOffer();
+        stepSimulation(30, { stopOnEscapeTrigger: true });
+        return;
+      }
       stepSimulation(30, { stopOnEscapeTrigger: true });
+    });
+
+    // 맑은 동네 콜 수락 / 큰길 계속 달리기 (시뮬레이터 카드 + 지도 오버레이)
+    ["btnAcceptCall", "btnMapAcceptCall"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("click", () => acceptCallOffer());
+    });
+    ["btnDeclineCall", "btnMapDeclineCall"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener("click", () => declineCallOffer());
     });
 
     // 수동 순환배차 전환
@@ -1731,6 +1917,27 @@
       }
       updateAllSimulatorVisuals();
     });
+
+    // 모바일 하단 원터치 고정 바
+    const mobilePrimaryBtn = document.getElementById("btnMobilePrimary");
+    if (mobilePrimaryBtn) {
+      mobilePrimaryBtn.addEventListener("click", () => {
+        if (state.callOfferActive) {
+          acceptCallOffer();
+        } else if (state.simRunning) {
+          stopContinuousLoop();
+        } else {
+          startContinuousLoop();
+        }
+      });
+    }
+    const mobileEscapeBtn = document.getElementById("btnMobileEscape");
+    if (mobileEscapeBtn) {
+      mobileEscapeBtn.addEventListener("click", () => {
+        const manualBtn = document.getElementById("btnManualEscape");
+        if (manualBtn && !manualBtn.disabled) manualBtn.click();
+      });
+    }
 
     // 초기화
     document.getElementById("btnSimReset").addEventListener("click", () => {
@@ -1818,5 +2025,13 @@
     initMap();
     bindEvents();
     await loadDashboard();
+    if (
+      "serviceWorker" in navigator &&
+      (window.location.protocol === "https:" ||
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1")
+    ) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
   });
 })();

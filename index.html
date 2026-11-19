@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Rider-AirGuard — 한냥 Safety · 도로변 가스 격차 기반 순환 배차 AI</title>
   <meta name="description" content="에어코리아 도시대기 vs 도로변 측정망 가스(NO2·O3·CO) 격차 분석 기반 배달 라이더 보호 및 지연 0분 권역 순환 배차 AI 관제 시스템" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="AirGuard" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="static/icons/icon-192.png" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23FEF08A'/%3E%3Cstop offset='50%25' stop-color='%23F59E0B'/%3E%3Cstop offset='100%25' stop-color='%23B45309'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='18' cy='18' r='16.5' fill='url(%23g)'/%3E%3Cpath d='M18 7.5L26 10.9V17.4C26 22.3 22.5 26.3 18 27.8C13.5 26.3 10 22.3 10 17.4V10.9L18 7.5Z' fill='%230B0F17'/%3E%3Cpath d='M13 18.2H15.6L17.1 14.5L19 21.1L20.5 17.4H23' stroke='%2334D399' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,7 +20,7 @@
   <link rel="stylesheet" href="static/css/style.css" />
 </head>
 <body>
-  <!-- A. 상단 내비게이션 바 (Frosted Ceramic + 한냥 브랜드 엠블럼) -->
+  <!-- A. 상단 내비게이션 바 (라이더 전용 슬림 헤더: 권역 선택 + 경고음) -->
   <header class="topbar">
     <div class="topbar-inner">
       <div class="brand-lockup">
@@ -50,15 +56,6 @@
         </nav>
 
         <div class="utility-controls">
-          <span id="apiStatusBadge" class="status-badge status-live">
-            에어코리아 실시간 연동
-          </span>
-          <button type="button" id="btnRefreshLive" class="btn-mini" title="실제 에어코리아 API에서 최신 데이터 다시 수집">
-            새로고침
-          </button>
-          <button type="button" id="btnTestFallback" class="btn-mini btn-mini-outline" title="API 장애 상황 대비 로컬 백업 Fallback 모드 시연">
-            Fallback 시연
-          </button>
           <button type="button" id="btnToggleAudio" class="btn-mini btn-mini-outline" title="경고음 알림 켜기/끄기">
             🔊 경고음 ON
           </button>
@@ -135,11 +132,15 @@
         <div class="map-wrapper">
           <div id="dispatchMap" class="map-light-tiles map-click-active"></div>
 
-          <!-- 순환 배차 발동 토스트 (깔끔한 화이트 글래스 카드) -->
+          <!-- 순환 배차 발동 / 콜 제안 토스트 -->
           <div id="mapDispatchOverlay" class="map-dispatch-overlay hidden" role="alert">
             <div class="overlay-badge" id="mapOverlayBadge">맑은 동네 콜 자동 전환</div>
             <div class="overlay-title" id="mapOverlayTitle">공기 맑은 외곽 동네 콜로 안전하게 이동 중</div>
             <div class="overlay-desc" id="mapOverlayDesc">배달 지연 0분 · 가까운 라이더 쉼터 거쳐 바로 회복</div>
+            <div id="mapOverlayActions" class="overlay-actions hidden">
+              <button type="button" id="btnMapAcceptCall" class="btn-mini btn-mini-emerald">✅ 맑은 콜 수락</button>
+              <button type="button" id="btnMapDeclineCall" class="btn-mini btn-mini-outline">큰길 계속 달리기</button>
+            </div>
           </div>
 
           <div class="map-legend">
@@ -249,6 +250,23 @@
             </button>
             <button type="button" id="btnSimReset" class="btn-ghost">
               처음부터
+            </button>
+          </div>
+        </div>
+
+        <!-- 80점 돌파 시 도착하는 맑은 동네 콜 수락/거절 제안 카드 -->
+        <div id="callOfferCard" class="call-offer-card hidden" role="alertdialog" aria-labelledby="callOfferTitle">
+          <div class="call-offer-top">
+            <span id="callOfferBadge" class="offer-badge">🔔 맑은 동네 콜 도착 · 4초 후 자동 수락</span>
+          </div>
+          <h3 id="callOfferTitle" class="call-offer-title">80점 넘었어요! 맑은 동네 콜로 바꿀까요?</h3>
+          <p id="callOfferMeta" class="call-offer-meta">배달 지연 0분 · +500P · 가까운 라이더 쉼터 경유</p>
+          <div class="call-offer-actions">
+            <button type="button" id="btnAcceptCall" class="btn-offer-accept">
+              ✅ 맑은 콜 수락 (지연 0분)
+            </button>
+            <button type="button" id="btnDeclineCall" class="btn-offer-decline">
+              큰길 계속 달리기 (위험 비교)
             </button>
           </div>
         </div>
@@ -373,9 +391,20 @@
       </div>
 
       <div class="data-proof-strip" aria-label="공공데이터 수집 및 결측 정제 현황">
-        <span class="proof-pill proof-rows"><strong id="kpiRowsCount" class="mono-num">201 행</strong> 수집</span>
-        <span id="kpiImputeBadge" class="pill pill-info">결측 19건 정제</span>
-        <span id="kpiMetaFoot" class="proof-meta">서울 40개 측정소 · 망구분 평균 Imputation 완료</span>
+        <div class="proof-info-group">
+          <span id="apiStatusBadge" class="status-badge status-live">에어코리아 실시간 연동</span>
+          <span class="proof-pill proof-rows"><strong id="kpiRowsCount" class="mono-num">201 행</strong> 수집</span>
+          <span id="kpiImputeBadge" class="pill pill-info">결측 19건 정제</span>
+          <span id="kpiMetaFoot" class="proof-meta">서울 40개 측정소 · 망구분 평균 Imputation 완료</span>
+        </div>
+        <div class="proof-actions">
+          <button type="button" id="btnRefreshLive" class="btn-mini" title="실제 에어코리아 API에서 최신 데이터 다시 수집">
+            새로고침
+          </button>
+          <button type="button" id="btnTestFallback" class="btn-mini btn-mini-outline" title="API 장애 상황 대비 로컬 백업 Fallback 모드 시연">
+            Fallback 시연
+          </button>
+        </div>
       </div>
 
       <div class="table-scroll">
@@ -445,6 +474,18 @@
         <button type="button" id="btnCloseZoomModal" class="btn-mini btn-mini-outline">닫기</button>
       </div>
       <img id="zoomChartImg" src="" alt="확대된 통계 차트" />
+    </div>
+  </div>
+
+  <!-- 모바일 전용 하단 원터치 고정 액션 바 (<= 680px에서만 표시) -->
+  <div id="mobileStickyBar" class="mobile-sticky-bar" aria-label="모바일 빠른 주행 컨트롤">
+    <div class="mobile-bar-status">
+      <strong id="mobileBarScore" class="mono-num text-emerald">0점</strong>
+      <span id="mobileBarLabel">대기 중</span>
+    </div>
+    <div class="mobile-bar-actions">
+      <button type="button" id="btnMobilePrimary" class="btn-ink mobile-bar-primary">▶ 주행 시작</button>
+      <button type="button" id="btnMobileEscape" class="btn-escape-action mobile-bar-escape">맑은 콜</button>
     </div>
   </div>
 
