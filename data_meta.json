@@ -5,135 +5,135 @@
     "홍대입구": "신촌로"
   },
   "api_errors": [],
-  "fetched_at": "2026-11-19 19:59:53 KST",
+  "fetched_at": "2026-11-20 14:54:36 KST",
   "total_rows": 201,
   "station_count": 40,
   "urban_rows": 94,
   "road_rows": 107,
-  "latest_data_time": "2026-11-19 19:00",
-  "imputed_cell_count": 32,
-  "imputed_station_count": 4,
+  "latest_data_time": "2026-11-20 14:00",
+  "imputed_cell_count": 37,
+  "imputed_station_count": 8,
   "group_means": {
     "도시대기": {
-      "pm10Value": 22.2,
-      "pm25Value": 11.3,
-      "o3Value": 0.0278,
-      "no2Value": 0.0078,
-      "coValue": 0.3
+      "pm10Value": 20.7,
+      "pm25Value": 8.4,
+      "o3Value": 0.0287,
+      "no2Value": 0.0073,
+      "coValue": 0.27
     },
     "도로변대기": {
-      "pm10Value": 26.2,
-      "pm25Value": 12.7,
-      "o3Value": 0.0235,
-      "no2Value": 0.0129,
+      "pm10Value": 24.9,
+      "pm25Value": 10.5,
+      "o3Value": 0.0228,
+      "no2Value": 0.0131,
       "coValue": 0.34
     }
   },
   "imputed_samples": [
     {
-      "dataTime": "2026-11-19 19:00",
-      "stationName": "양천구",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "성북구",
       "mangName": "도시대기",
       "column": "pm10Value",
-      "imputedValue": 22.2
+      "imputedValue": 20.7
     },
     {
-      "dataTime": "2026-11-19 19:00",
-      "stationName": "양천구",
-      "mangName": "도시대기",
-      "column": "pm25Value",
-      "imputedValue": 11.3
-    },
-    {
-      "dataTime": "2026-11-19 19:00",
-      "stationName": "양천구",
-      "mangName": "도시대기",
-      "column": "o3Value",
-      "imputedValue": 0.0278
-    },
-    {
-      "dataTime": "2026-11-19 19:00",
-      "stationName": "양천구",
-      "mangName": "도시대기",
-      "column": "no2Value",
-      "imputedValue": 0.0078
-    },
-    {
-      "dataTime": "2026-11-19 19:00",
-      "stationName": "양천구",
-      "mangName": "도시대기",
-      "column": "coValue",
-      "imputedValue": 0.3
-    },
-    {
-      "dataTime": "2026-11-19 14:00",
-      "stationName": "강남대로",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "정릉로",
       "mangName": "도로변대기",
       "column": "pm10Value",
-      "imputedValue": 26.2
+      "imputedValue": 24.9
     },
     {
-      "dataTime": "2026-11-19 14:00",
-      "stationName": "강남대로",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "정릉로",
       "mangName": "도로변대기",
       "column": "pm25Value",
-      "imputedValue": 12.7
+      "imputedValue": 10.5
     },
     {
-      "dataTime": "2026-11-19 14:00",
-      "stationName": "강남대로",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "정릉로",
       "mangName": "도로변대기",
       "column": "o3Value",
-      "imputedValue": 0.0235
+      "imputedValue": 0.0228
     },
     {
-      "dataTime": "2026-11-19 14:00",
-      "stationName": "강남대로",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "정릉로",
       "mangName": "도로변대기",
       "column": "no2Value",
-      "imputedValue": 0.0129
+      "imputedValue": 0.0131
     },
     {
-      "dataTime": "2026-11-19 14:00",
-      "stationName": "강남대로",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "정릉로",
       "mangName": "도로변대기",
       "column": "coValue",
       "imputedValue": 0.34
     },
     {
-      "dataTime": "2026-11-19 13:00",
-      "stationName": "강남대로",
-      "mangName": "도로변대기",
-      "column": "pm10Value",
-      "imputedValue": 26.2
-    },
-    {
-      "dataTime": "2026-11-19 13:00",
-      "stationName": "강남대로",
-      "mangName": "도로변대기",
-      "column": "pm25Value",
-      "imputedValue": 12.7
-    },
-    {
-      "dataTime": "2026-11-19 16:00",
-      "stationName": "동대문구",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "도봉구",
       "mangName": "도시대기",
       "column": "pm10Value",
-      "imputedValue": 22.2
+      "imputedValue": 20.7
     },
     {
-      "dataTime": "2026-11-19 16:00",
-      "stationName": "동대문구",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "도봉구",
       "mangName": "도시대기",
       "column": "pm25Value",
-      "imputedValue": 11.3
+      "imputedValue": 8.4
     },
     {
-      "dataTime": "2026-11-19 16:00",
-      "stationName": "동대문구",
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "도봉구",
       "mangName": "도시대기",
       "column": "o3Value",
-      "imputedValue": 0.0278
+      "imputedValue": 0.0287
+    },
+    {
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "도봉구",
+      "mangName": "도시대기",
+      "column": "no2Value",
+      "imputedValue": 0.0073
+    },
+    {
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "도봉구",
+      "mangName": "도시대기",
+      "column": "coValue",
+      "imputedValue": 0.27
+    },
+    {
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "영등포로",
+      "mangName": "도로변대기",
+      "column": "pm10Value",
+      "imputedValue": 24.9
+    },
+    {
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "영등포로",
+      "mangName": "도로변대기",
+      "column": "pm25Value",
+      "imputedValue": 10.5
+    },
+    {
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "영등포로",
+      "mangName": "도로변대기",
+      "column": "o3Value",
+      "imputedValue": 0.0228
+    },
+    {
+      "dataTime": "2026-11-20 14:00",
+      "stationName": "영등포로",
+      "mangName": "도로변대기",
+      "column": "no2Value",
+      "imputedValue": 0.0131
     }
   ]
 }
