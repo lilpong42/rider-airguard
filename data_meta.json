@@ -5,58 +5,58 @@
     "홍대입구": "신촌로"
   },
   "api_errors": [],
-  "fetched_at": "2026-11-21 03:38:27 KST",
+  "fetched_at": "2026-11-21 14:48:28 KST",
   "total_rows": 201,
   "station_count": 40,
   "urban_rows": 94,
   "road_rows": 107,
-  "latest_data_time": "2026-11-21 03:00",
+  "latest_data_time": "2026-11-21 14:00",
   "imputed_cell_count": 4,
-  "imputed_station_count": 3,
+  "imputed_station_count": 2,
   "group_means": {
     "도시대기": {
-      "pm10Value": 19.2,
-      "pm25Value": 8.2,
-      "o3Value": 0.0253,
-      "no2Value": 0.0089,
+      "pm10Value": 20.0,
+      "pm25Value": 9.0,
+      "o3Value": 0.0285,
+      "no2Value": 0.0086,
       "coValue": 0.29
     },
     "도로변대기": {
-      "pm10Value": 23.3,
+      "pm10Value": 22.3,
       "pm25Value": 9.4,
-      "o3Value": 0.0204,
-      "no2Value": 0.0143,
+      "o3Value": 0.0223,
+      "no2Value": 0.0145,
       "coValue": 0.35
     }
   },
   "imputed_samples": [
     {
-      "dataTime": "2026-11-21 03:00",
+      "dataTime": "2026-11-21 14:00",
       "stationName": "양천구",
       "mangName": "도시대기",
       "column": "pm10Value",
-      "imputedValue": 19.2
+      "imputedValue": 20.0
     },
     {
-      "dataTime": "2026-11-21 03:00",
+      "dataTime": "2026-11-21 14:00",
       "stationName": "양천구",
       "mangName": "도시대기",
       "column": "pm25Value",
-      "imputedValue": 8.2
+      "imputedValue": 9.0
     },
     {
-      "dataTime": "2026-11-21 03:00",
-      "stationName": "은평구",
-      "mangName": "도시대기",
-      "column": "no2Value",
-      "imputedValue": 0.0089
-    },
-    {
-      "dataTime": "2026-11-20 09:00",
+      "dataTime": "2026-11-21 10:00",
       "stationName": "마포구",
       "mangName": "도시대기",
       "column": "pm10Value",
-      "imputedValue": 19.2
+      "imputedValue": 20.0
+    },
+    {
+      "dataTime": "2026-11-21 09:00",
+      "stationName": "마포구",
+      "mangName": "도시대기",
+      "column": "pm10Value",
+      "imputedValue": 20.0
     }
   ]
 }
